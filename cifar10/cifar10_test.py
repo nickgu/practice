@@ -6,15 +6,17 @@ import pydev
 import nnet_tf
 import load_data
 
-if __name__ == '__main__':
-    train_x, train_y = load_data.load_one_part()
+import sys
 
-    print train_x.shape
-    print train_y.shape
+if __name__ == '__main__':
+    model_path = sys.argv[1]
 
     net = nnet_tf.ConfigNetwork('net.conf', 'cifar10')
+    net.load(model_path)
 
-    net.fit(train_x, train_y)
+    train_x, train_y = load_data.load_one_part()
+    print train_x.shape
+    print train_y.shape
 
     # simple_test
     x = train_x
