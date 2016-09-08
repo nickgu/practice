@@ -18,10 +18,7 @@ if __name__ == '__main__':
     print train_x.shape
     print train_y.shape
 
-    # simple_test
-    x = train_x
-    y = train_y
-    pred_y = net.predict(x)
-    print nnet_tf.precision_01(y, pred_y)
+    pred_y = net.predict(test_x)
+    print nnet_tf.precision_01(test_y, pred_y)
 
 
