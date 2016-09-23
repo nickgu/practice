@@ -4,10 +4,14 @@
 #
 #   Usage:
 #       python simple_svd.py <movielens_user_data> [seperater=<tab>]
+#       
+#   example:
+#       python simple_svd.py ml-100k/u.data
 #
 #      movielens_user_data format:
 #
 #      <uid>[tab]<iid>[tab]<rating>[tab]timestamp
+#   
 #
 
 import sys
