@@ -16,7 +16,10 @@ import random
 import numpy as np
 import sklearn.decomposition as dc
 
-class Learner:
+# refer to simple_fm.py in this dir.
+import simple_fm
+
+class SVDLearner:
     def __init__(self):
         self.__svd = dc.TruncatedSVD(n_components = 64)
 
@@ -83,7 +86,15 @@ if __name__=='__main__':
 
     print 'load data over train=%d test=%d' % (len(train), len(test))
 
-    learner = Learner()
+    # sklearn SVD: 
+    #  minimum 32% inverse ratio.
+    #learner = SVDLearner()
+
+    # pyfm:
+    # inverse_ratio : 19.05% at 20 epoch.
+    # inverse_ratio : 19.05% at 100 epoch.
+    learner = simple_fm.SimpleFMLearner()
+    
     learner.fit(train)
 
     # calculate inverse count.
