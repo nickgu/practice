@@ -76,7 +76,7 @@ def load_data(filename, sep='\t'):
         data.append( (uid, iid, rating) )
 
     # make 4/5 as train, 1/5 as test.
-    split = len(data) // 5 * 4
+    split = len(data) // 20 * 19
     train, test = data[:split], data[split:]
     return train, test
 
@@ -94,10 +94,16 @@ if __name__=='__main__':
     #  minimum 32% inverse ratio.
     #learner = SVDLearner()
 
-    # pyfm:
-    # inverse_ratio : 19.05% at 20 epoch.
-    # inverse_ratio : 19.05% at 100 epoch.
-    learner = simple_fm.SimpleFMLearner()
+    # pyfm, inverse_ratio:
+    # factor=10, use_info=False
+    #   e20  : 19.05%
+    #   e100 : 19.05%
+    # factor=10, use_info=True
+    #   e100 : 18.22%
+    # factor=16, use_info=True
+    #   e20  : 19.17%
+    #   e100 : 18.63% (minimum mse:0.27 at train)
+    learner = simple_fm.SimpleFMLearner(iter=100, factor=16, use_info=True)
     
     learner.fit(train)
 
