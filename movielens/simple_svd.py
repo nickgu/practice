@@ -80,6 +80,28 @@ def load_data(filename, sep='\t'):
     train, test = data[:split], data[split:]
     return train, test
 
+
+def inverse_ratio(order):
+    # in y_, -rating ascendant order.
+    order = sorted(order, key=lambda x:(x[0], -x[1]))
+
+    prev_count = {}
+    inverse_count = 0
+    total_count = 0
+
+    for i, (_, r) in enumerate(order):
+        for key, count in prev_count.iteritems():
+            total_count += count
+            if key > r:
+                inverse_count += count
+
+        # update previous count 
+        prev_count[r] = prev_count.get(r, 0) + 1
+
+    inv_ratio = inverse_count * 100.  / total_count
+    return inv_ratio, inverse_count, total_count
+
+
 if __name__=='__main__':
     filename = sys.argv[1]
     path = './'
@@ -117,24 +139,8 @@ if __name__=='__main__':
         #print >> sys.stderr, '%d\t%d\t%.4f\t%d' % (uid, iid, y_, rating)
         order.append( (y_, rating) )
 
+    inv_ratio, inverse_count, total_count = inverse_ratio(order)
 
-    # in y_, -rating ascendant order.
-    order = sorted(order, key=lambda x:(x[0], -x[1]))
-
-    prev_count = {}
-    inverse_count = 0
-    total_count = 0
-
-    for i, (_, r) in enumerate(order):
-        for key, count in prev_count.iteritems():
-            total_count += count
-            if key > r:
-                inverse_count += count
-
-        # update previous count 
-        prev_count[r] = prev_count.get(r, 0) + 1
-
-    inv_ratio = inverse_count * 100.  / total_count
     print 'inverse_ratio: %.2f%% (%d/%d)' % (
             inv_ratio, inverse_count, total_count)
 
