@@ -16,7 +16,7 @@ from sklearn.feature_extraction import DictVectorizer
 from pyfm import pylibfm
 
 class Info: 
-    def __init__(self, path="/Users/nickgu/lab/datasets/movielens/ml-100k/"):
+    def __init__(self, path='./'):
         self.__movie_info = {}
         self.__user_info = {}
         for line in file(path + 'u.item').readlines():
@@ -24,6 +24,7 @@ class Info:
              noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split('|')
 
             self.__movie_info[int(id)] = {
+                    'unknown' : int(unknown),
                     'action': int(action),
                     'adventure': int(adventure),
                     'animation': int(animation),
@@ -49,6 +50,7 @@ class Info:
             self.__user_info[int(id)] = {
                         'gender' : gender,
                         'occupation' : occupation,
+                        'age' : str(int(age) / 5)
                     }
 
     def process(self, userid, movieid, data):
@@ -62,7 +64,7 @@ class Info:
 
 
 class SimpleFMLearner:
-    def __init__(self, iter=100, factor=10, use_info=True):
+    def __init__(self, iter=100, factor=10, use_info=True, path='./'):
         print >> sys.stderr, 'iter=%d, factor=%d, use_info=%d' % (iter, factor, use_info)
 
 
@@ -77,7 +79,7 @@ class SimpleFMLearner:
 
         # temp code, load ml-100k's info
         if self.__use_info:
-            self.__info = Info()
+            self.__info = Info(path)
 
     def fit(self, train):
         ''' train : [(userid, itemid, rating)...] '''
@@ -108,7 +110,7 @@ class SimpleFMLearner:
         return d
 
 # Read in data
-def loadData(filename, info, path="/Users/nickgu/lab/datasets/movielens/ml-100k/"):
+def loadData(filename, info, path="./"):
     data = []
     y = []
     users=set()

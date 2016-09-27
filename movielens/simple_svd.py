@@ -82,9 +82,12 @@ def load_data(filename, sep='\t'):
 
 if __name__=='__main__':
     filename = sys.argv[1]
+    path = './'
+
     if len(sys.argv)>2:
-        print 'sep=[%s]' % sys.argv[2]
-        train, test = load_data(filename, sep=sys.argv[2])
+        path = sys.argv[2]
+        print >> sys.stderr, 'path=[%s]' % path
+        train, test = load_data(filename)
     else:
         train, test = load_data(filename)
 
@@ -103,7 +106,7 @@ if __name__=='__main__':
     # factor=16, use_info=True
     #   e20  : 19.17%
     #   e100 : 18.63% (minimum mse:0.27 at train)
-    learner = simple_fm.SimpleFMLearner(iter=100, factor=16, use_info=True)
+    learner = simple_fm.SimpleFMLearner(iter=140, factor=24, use_info=True, path=path)
     
     learner.fit(train)
 
