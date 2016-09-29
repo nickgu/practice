@@ -55,6 +55,7 @@ class Info:
 
         # try to add neighborhood info.
         # TODO: temp code.
+        '''
         for line in file(path + 'u.data').readlines()[:95000]:
             uid, mid, rate, time = line.strip('\n').split('\t')
             uid = int(uid)
@@ -62,6 +63,7 @@ class Info:
 
             self.__user_info[uid]['movie_%s' % mid] = 1
             self.__movie_info[mid]['user_%s' % uid] = 1
+        '''
 
     def process(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})

@@ -61,7 +61,7 @@ def load_data(path):
     return U, I, Y
 
 if __name__ == '__main__':
-    U, I, Y = load_data(path=sys.argv[1])
+    U, I, Y = load_data(path=sys.argv[1] + '/')
 
     train_file = file('data/svdf_train.txt', 'w')
     test_file = file('data/svdf_test.txt', 'w')
