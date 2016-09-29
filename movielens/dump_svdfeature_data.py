@@ -44,10 +44,11 @@ def load_data(path):
     Y = []
     for userid, itemid, rating in data:
         d = { "user_id": str(userid) } 
-        #d = info.process(userid, itemid, d)
+        d = info.process_user(userid, itemid, d)
         U.append(d)
 
         d = { "movie_id": str(itemid) }
+        d = info.process_movie(userid, itemid, d)
         I.append(d)
 
         Y.append( rating )
@@ -63,6 +64,9 @@ def load_data(path):
 if __name__ == '__main__':
     U, I, Y = load_data(path=sys.argv[1] + '/')
 
+    max_user_feature = 0
+    max_movie_feature = 0
+
     train_file = file('data/svdf_train.txt', 'w')
     test_file = file('data/svdf_test.txt', 'w')
     for ins_idx, y in enumerate(Y):
@@ -76,9 +80,13 @@ if __name__ == '__main__':
         # user feature.
         for idx in range(len(f_u.indices)):
             line += ' %d:%.2f' % (f_u.indices[idx], f_u.data[idx])
+            if max_user_feature < f_u.indices[idx]:
+                max_user_feature = f_u.indices[idx]
 
         for idx in range(len(f_i.indices)):
             line += ' %d:%.2f' % (f_i.indices[idx], f_i.data[idx])
+            if max_movie_feature < f_i.indices[idx]:
+                max_movie_feature = f_i.indices[idx]
 
         # output file.
         if ins_idx<95000:
@@ -86,4 +94,6 @@ if __name__ == '__main__':
         else:
             print >> test_file, line
 
+    print >> sys.stderr, 'user_feature_count = %d' % (max_user_feature + 1)
+    print >> sys.stderr, 'movie_feature_count = %d' % (max_movie_feature + 1)
 

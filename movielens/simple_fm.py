@@ -65,10 +65,13 @@ class Info:
             self.__movie_info[mid]['user_%s' % uid] = 1
         '''
 
-    def process(self, userid, movieid, data):
+    def process_user(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})
         for key, value in udata.iteritems():
             data[key] = value
+        return data
+
+    def process_movie(self, userid, movieid, data):
         mdata = self.__movie_info.get(movieid, {})
         for key, value in mdata.iteritems():
             data[key] = value

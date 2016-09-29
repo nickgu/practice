@@ -127,9 +127,18 @@ if __name__=='__main__':
     #   e100 : 18.22%
     # factor=16, use_info=True
     #   e20  : 19.17%
-    #   e100 : 18.63% (minimum mse:0.27 at train)
+    #   e100 : 18.63% 
     learner = simple_fm.SimpleFMLearner(iter=140, factor=24, use_info=True, path=path)
-    
+
+    # use svdfeature and make user-rated_item as feature, item_rated_user as feature.
+    # learning_rate=0.0001, reg: wd_user=wd_item=0.003
+    #   e100 : 17.33%
+    #   e200 : 17.11%
+    #   e300 : 17.02% 
+    #   e450 : 16.95%
+    # svd_feature inplement
+
+
     learner.fit(train)
 
     # calculate inverse count.
