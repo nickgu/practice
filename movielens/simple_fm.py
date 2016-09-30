@@ -65,6 +65,16 @@ class Info:
             self.__movie_info[mid]['user_%s' % uid] = 1
         '''
 
+    def process(self, userid, movieid, data):
+        udata = self.__user_info.get(userid, {})
+        for key, value in udata.iteritems():
+            data[key] = value
+        mdata = self.__movie_info.get(movieid, {})
+        for key, value in mdata.iteritems():
+            data[key] = value
+        return data
+
+
     def process_user(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})
         for key, value in udata.iteritems():
@@ -79,22 +89,25 @@ class Info:
 
 
 class SimpleFMLearner:
-    def __init__(self, iter=100, factor=10, use_info=True, path='./'):
-        print >> sys.stderr, 'iter=%d, factor=%d, use_info=%d' % (iter, factor, use_info)
-
-
-        # Build and train a Factorization Machine
-        self.__fm = pylibfm.FM(num_factors=factor, num_iter=iter, 
-                verbose=True, 
-                task="regression", 
-                initial_learning_rate=0.001, 
-                learning_rate_schedule="optimal")
-
+    def __init__(self, iter=100, factor=10, use_info=True, path='./', external_fm=None):
         self.__use_info = use_info
-
         # temp code, load ml-100k's info
         if self.__use_info:
             self.__info = Info(path)
+
+        # Build and train a Factorization Machine
+        if external_fm:
+            print >> sys.stderr, 'Use external FM: %s' % type(external_fm)
+            self.__fm = external_fm
+        else:
+            print >> sys.stderr, 'iter=%d, factor=%d, use_info=%d' % (iter, factor, use_info)
+            self.__fm = pylibfm.FM(num_factors=factor, num_iter=iter, 
+                    verbose=True, 
+                    task="regression", 
+                    initial_learning_rate=0.001, 
+                    learning_rate_schedule="optimal")
+
+
 
     def fit(self, train):
         ''' train : [(userid, itemid, rating)...] '''
@@ -108,7 +121,7 @@ class SimpleFMLearner:
 
         self.__v = DictVectorizer()
         X_train = self.__v.fit_transform(train_data)
-        self.__fm.fit(X_train,y_train)
+        self.__fm.fit(X_train,np.array(y_train))
 
     def predict(self, userid, itemid):
         d = self.__make_data(userid, itemid)

@@ -115,11 +115,12 @@ if __name__=='__main__':
 
     print 'load data over train=%d test=%d' % (len(train), len(test))
 
-    # sklearn SVD: 
+    # TEST: sklearn SVD: 
     #  minimum 32% inverse ratio.
     #learner = SVDLearner()
+    #learner.fit(train)
 
-    # pyfm, inverse_ratio:
+    # TEST: pyfm, inverse_ratio:
     # factor=10, use_info=False
     #   e20  : 19.05%
     #   e100 : 19.05%
@@ -128,8 +129,12 @@ if __name__=='__main__':
     # factor=16, use_info=True
     #   e20  : 19.17%
     #   e100 : 18.63% 
-    learner = simple_fm.SimpleFMLearner(iter=140, factor=24, use_info=True, path=path)
+    '''
+    learner = simple_fm.SimpleFMLearner(iter=140, factor=6, use_info=True, path=path)
+    learner.fit(train)
+    '''
 
+    # TEST: svdfeature
     # use svdfeature and make user-rated_item as feature, item_rated_user as feature.
     # learning_rate=0.0001, reg: wd_user=wd_item=0.003
     #   e100 : 17.33%
@@ -137,8 +142,24 @@ if __name__=='__main__':
     #   e300 : 17.02% 
     #   e450 : 16.95%
     # svd_feature inplement
+    # EXTERNAL CODE.
 
-
+    # TEST fastFM.
+    # it's very very fast..
+    # no use_info(only UID, MID):
+    #   e30: 17.9% (ALS, iter=30, rank=2)
+    # hard to tune the sgd.
+    #   epoch 1000(1000*10w) with 0.0005 step_size(learning_rate): 17.34
+    #
+    #   
+    from fastFM import als,mcmc,sgd
+    learner = simple_fm.SimpleFMLearner(
+            #external_fm = sgd.FMRegression(n_iter=100000000, step_size=0.0005, init_stdev=0.1, rank=12),
+            external_fm = als.FMRegression(n_iter=30, init_stdev=0.1, rank=2, l2_reg_w=0.1, l2_reg_V=0.5),
+            #external_fm = mcmc.FMRegression(n_iter=1000, init_stdev=0.1, rank=4),
+            use_info = True,
+            path = path,
+            )
     learner.fit(train)
 
     # calculate inverse count.
