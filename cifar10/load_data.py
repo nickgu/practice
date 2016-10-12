@@ -7,7 +7,8 @@ import numpy as np
 import pydev
 import sys
 
-cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
+#cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
+cifar10_dir='/Users/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
 
 file_list = map(lambda x:cifar10_dir+x, [
     'data_batch_1',

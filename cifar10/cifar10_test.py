@@ -14,9 +14,9 @@ if __name__ == '__main__':
     net = nnet_tf.ConfigNetwork('net.conf', 'cifar10')
     net.load(model_path)
 
-    train_x, train_y = load_data.load_one_part()
-    print train_x.shape
-    print train_y.shape
+    test_x, test_y = load_data.load_one_part()
+    print test_x.shape
+    print test_y.shape
 
     pred_y = net.predict(test_x)
     print nnet_tf.precision_01(test_y, pred_y)
