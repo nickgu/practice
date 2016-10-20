@@ -6,46 +6,107 @@ import pydev
 import nnet_tf
 import load_data
 
+import tensorflow as tf
 import sys
+
+
+class Tester:
+    def __init__(self):
+        self.__best_precision = 0
+        self.__best_iteration = 0
+        
+        self.sess = tf.Session()
+        self.s_test_precision = tf.placeholder(tf.float32)
+        a = tf.scalar_summary('validation/precision/test', self.s_test_precision)
+        self.merged = tf.merge_summary([a])
+
+    def test(self, predict, summary_writer=None, iteration=0):
+        pred_y = net.predict(test_x)
+        precision = nnet_tf.precision_01(
+                    pydev.index_to_one_hot(test_y, 10), 
+                    pred_y
+                )[0]
+
+        if summary_writer:
+            _, summary = self.sess.run([self.s_test_precision, self.merged], 
+                    feed_dict = {
+                        self.s_test_precision: precision,
+                        })
+            summary_writer.add_summary(summary, iteration)
+
+        if precision > self.__best_precision:
+            self.__best_precision = precision
+            self.__best_iteration = iteration
+        print >> sys.stderr, '[iter=%d] Test precision: %.3f (best=%.3f, at iteration %d)' % (
+                iteration, precision,
+                self.__best_precision,
+                self.__best_iteration)
+
+class Preprocessor:
+    def __init__(self):
+        self.sess = tf.Session()
+
+        CropSize = 24
+        self.image = tf.placeholder(tf.uint8, shape=[32, 32, 3])
+        distorted_image = tf.cast(self.image, tf.float32)
+        distorted_image = tf.random_crop(distorted_image, [CropSize, CropSize, 3])
+        distorted_image = tf.image.random_flip_left_right(distorted_image)
+        distorted_image = tf.image.random_brightness(distorted_image, max_delta=63)
+        distorted_image = tf.image.random_contrast(distorted_image, lower=0.2, upper=1.8)
+        distorted_image = tf.image.per_image_whitening(distorted_image)
+        self.distorted_image = distorted_image
+
+    def distorted(self, x, y):
+        processed_x = []
+        for image in x:
+            image_out = self.sess.run(self.distorted_image, feed_dict={self.image:image})
+            processed_x.append( image_out )
+        return processed_x, y
+    
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
     net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_32')
 
-    train_x, train_y = load_data.load_all_data(dup=4, image_preprocess=True, shuffle=True)
-    #train_x, train_y = load_data.load_data()
-
-    #test_x, test_y = train_x, train_y
-    #test_x, test_y = load_data.load_one_part(dup=1, image_preprocess=True)
-    test_x, test_y = load_data.load_test()
-
-
-    '''
-    temp_store = pydev.TempStorage('one5_one', 'temp/one5_one.ts')
-    if temp_store.has_data():
-        train_x, train_y, test_x, test_y = temp_store.read()
+    temp_data = pydev.TempStorage('normal_data', 'temp/normal_data.ts')
+    if temp_data.has_data():
+        train_x = temp_data.read()
+        train_y = temp_data.read()
+        test_x = temp_data.read()
+        test_y = temp_data.read()
 
     else:
-        train_x, train_y = load_data.load_one_part(dup=5, image_preprocess=True, shuffle=True)
-        #train_x, train_y = load_data.load_data()
+        train_x, train_y = load_data.load_all_data()
+        test_x, test_y = load_data.load_test()
 
-        #test_x, test_y = train_x, train_y
-        test_x, test_y = load_data.load_one_part(dup=1, image_preprocess=True)
-        #test_x, test_y = load_data.load_test()
+        temp_data.write(train_x)
+        temp_data.write(train_y)
+        temp_data.write(test_x)
+        temp_data.write(test_y)
 
-        temp_store.write([train_x, train_y, test_x, test_y])
-    '''
+    # process test_X
+    sess = tf.Session()
+    CropSize = 24
+    image_in = tf.placeholder(tf.uint8, shape=[32, 32, 3])
+    image = tf.cast(image_in, tf.float32)
+    resize_image = tf.image.resize_image_with_crop_or_pad(image, CropSize, CropSize)
+    test_image = tf.image.per_image_whitening(resize_image)
+    
+    processed_X = []
+    for image in test_x:
+        image_out = sess.run( test_image, feed_dict={image_in:image})
+        processed_X.append( image_out )
 
-    def tester(predict):
-        pred_y = net.predict(train_x[:10000])
-        train_precision = nnet_tf.precision_01(train_y[:10000], pred_y)[0]
+    test_x = processed_X
 
-        pred_y = net.predict(test_x)
-        precision = nnet_tf.precision_01(test_y, pred_y)[0]
-        print >> sys.stderr, 'Test precision: %.3f (train_P:%.3f)' % (
-                precision, train_precision)
-
-
-    net.fit(train_x, train_y, tester)
+    tester = Tester()
+    pre = Preprocessor()
+    net.fit(train_x, train_y, tester.test, callback_iteration=400, preprocessor=pre.distorted)
+    print >> sys.stderr, 'Final prediction'
+    tester.test(net.predict)
     net.save(model_path)
+    
+
+
+
 
