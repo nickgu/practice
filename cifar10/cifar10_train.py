@@ -44,29 +44,22 @@ class Tester:
 
 class Preprocessor:
     def __init__(self):
-        self.sess = tf.Session()
+        pass
 
+    def distorted(self, queue_x, queue_y):
         CropSize = 24
-        self.image = tf.placeholder(tf.uint8, shape=[32, 32, 3])
-        distorted_image = tf.cast(self.image, tf.float32)
+        distorted_image = tf.cast(queue_x, tf.float32)
         distorted_image = tf.random_crop(distorted_image, [CropSize, CropSize, 3])
         distorted_image = tf.image.random_flip_left_right(distorted_image)
         distorted_image = tf.image.random_brightness(distorted_image, max_delta=63)
         distorted_image = tf.image.random_contrast(distorted_image, lower=0.2, upper=1.8)
         distorted_image = tf.image.per_image_whitening(distorted_image)
-        self.distorted_image = distorted_image
 
-    def distorted(self, x, y):
-        processed_x = []
-        for image in x:
-            image_out = self.sess.run(self.distorted_image, feed_dict={self.image:image})
-            processed_x.append( image_out )
-        return processed_x, y
-    
+        return distorted_image, queue_y
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
-    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_32')
+    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_simple_layer3')
 
     temp_data = pydev.TempStorage('normal_data', 'temp/normal_data.ts')
     if temp_data.has_data():
