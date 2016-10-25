@@ -8,6 +8,7 @@ import pydev
 import struct
 import cv2
 import numpy as np
+import nnet_tf
 
 class DBReader:
     def __init__(self):
@@ -28,8 +29,8 @@ class DBReader:
                 #print len(buf_label), len(buf_image_a), len(buf_image_b)
                 
                 label = struct.unpack('i', buf_label)[0]
-                image_a = np.np.asarray(bytearray(buf_image_a), dtype=np.uint8)
-                image_b = np.np.asarray(bytearray(buf_image_b), dtype=np.uint8)
+                image_a = cv2.imdecode( np.asarray(bytearray(buf_image_a), dtype=np.uint8), 1)
+                image_b = cv2.imdecode( np.asarray(bytearray(buf_image_b), dtype=np.uint8), 1)
 
                 yield label, image_a, image_b
                 self.__record_count += 1
@@ -63,10 +64,21 @@ if __name__=='__main__':
     Xs = []
     Ys = []
     for label, im_1, im_2 in DBReader().read(filename):
+        im_1 = im_1[:224,:224]
+        im_2 = im_2[:224,:224]
+
         labels.append(label)
         Xs.append(im_1)
         Ys.append(im_2)
+        if len(labels)>=64:
+            break
 
-    labels = numpy.array(labels)
-    Xs = numpy.array(Xs)
-    Ys = numpy.array(Ys)
+    labels = np.array(labels)
+    Xs = np.array(Xs)
+    Ys = np.array(Ys)
+
+    print Xs.shape
+
+    network = nnet_tf.ConfigNetwork('net.conf', 'image_pair')
+    network.fit([Xs, Ys], labels)
+
