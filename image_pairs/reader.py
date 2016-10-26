@@ -9,6 +9,7 @@ import struct
 import cv2
 import numpy as np
 import nnet_tf
+import gc
 
 class DBReader:
     def __init__(self):
@@ -70,15 +71,15 @@ if __name__=='__main__':
         labels.append(label)
         Xs.append(im_1)
         Ys.append(im_2)
-        if len(labels)>=64:
-            break
 
     labels = np.array(labels)
     Xs = np.array(Xs)
     Ys = np.array(Ys)
-
-    print Xs.shape
+    gc.collect()
 
     network = nnet_tf.ConfigNetwork('net.conf', 'image_pair')
     network.fit([Xs, Ys], labels)
+
+
+
 
