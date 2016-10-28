@@ -59,7 +59,7 @@ class Preprocessor:
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
-    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_cnn3_fc')
+    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_cnn3_fc_use_residual')
 
     temp_data = pydev.TempStorage('normal_data', 'temp/normal_data.ts')
     if temp_data.has_data():
