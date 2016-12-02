@@ -3,13 +3,10 @@
 # author: nickgu
 #
 #   Usage:
-#       python simple_svd.py <movielens_user_data> [seperater=<tab>]
+#       python dump_svdfeature_data.py <movielens_path>
 #       
 #   example:
-#       python simple_svd.py ml-100k/u.data
-#
 #      movielens_user_data format:
-#
 #      <uid>[tab]<iid>[tab]<rating>[tab]timestamp
 #   
 #

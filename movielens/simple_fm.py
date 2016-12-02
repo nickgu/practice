@@ -13,7 +13,6 @@
 import sys
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
-from pyfm import pylibfm
 
 class Info: 
     def __init__(self, path='./'):
@@ -90,6 +89,7 @@ class Info:
 
 class SimpleFMLearner:
     def __init__(self, iter=100, factor=10, use_info=True, path='./', external_fm=None):
+        from pyfm import pylibfm
         self.__use_info = use_info
         # temp code, load ml-100k's info
         if self.__use_info:
