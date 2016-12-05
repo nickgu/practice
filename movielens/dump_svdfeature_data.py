@@ -59,6 +59,10 @@ def load_data(path):
     return U, I, Y
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print >> sys.stderr, 'Usage: dump_svdfeature_data.py <ml_data_path>'
+        sys.exit(-1)
+
     U, I, Y = load_data(path=sys.argv[1] + '/')
 
     max_user_feature = 0

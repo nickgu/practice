@@ -9,8 +9,12 @@ MovieLens dataset train and test
 this scrip make train.in test.in in data/
 
 > mkdir data
+
 > python dump_svdfeature_data.py <movielens_path>
 
+> mkdir models
+
+> ./svd_feature movielens_svdfeature.conf
 
 
 
