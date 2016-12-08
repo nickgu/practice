@@ -75,7 +75,7 @@ def load_data(filename, sep='\t'):
         rating = float(rating)
         data.append( (uid, iid, rating) )
 
-    # make 4/5 as train, 1/5 as test.
+    # make 19/20 as train, 1/20 as test.
     split = len(data) // 20 * 19
     train, test = data[:split], data[split:]
     return train, test
@@ -129,10 +129,8 @@ if __name__=='__main__':
     # factor=16, use_info=True
     #   e20  : 19.17%
     #   e100 : 18.63% 
-    '''
     learner = simple_fm.SimpleFMLearner(iter=140, factor=6, use_info=True, path=path)
     learner.fit(train)
-    '''
 
     # TEST: svdfeature
     # use svdfeature and make user-rated_item as feature, item_rated_user as feature.
@@ -151,7 +149,9 @@ if __name__=='__main__':
     # hard to tune the sgd.
     #   epoch 1000(1000*10w) with 0.0005 step_size(learning_rate): 17.34
     #
-    #   
+    # NOTICE: fastFM seems not to support centOS.   
+    #
+    '''
     from fastFM import als,mcmc,sgd
     learner = simple_fm.SimpleFMLearner(
             #external_fm = sgd.FMRegression(n_iter=100000000, step_size=0.0005, init_stdev=0.1, rank=12),
@@ -161,6 +161,7 @@ if __name__=='__main__':
             path = path,
             )
     learner.fit(train)
+    '''
 
     # calculate inverse count.
     order = []

@@ -52,9 +52,10 @@ class Info:
                         'age' : str(int(age) / 5)
                     }
 
-        # try to add neighborhood info.
+        # try to add neighborhood info. (significant improval for svdfeature)
+        #   add user feature: movie_user_rated.
+        #   add movie feature: user_rated.
         # TODO: temp code.
-        '''
         for line in file(path + 'u.data').readlines()[:95000]:
             uid, mid, rate, time = line.strip('\n').split('\t')
             uid = int(uid)
@@ -62,7 +63,6 @@ class Info:
 
             self.__user_info[uid]['movie_%s' % mid] = 1
             self.__movie_info[mid]['user_%s' % uid] = 1
-        '''
 
     def process(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})

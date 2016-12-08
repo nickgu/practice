@@ -71,12 +71,15 @@ if __name__ == '__main__':
     train_file = file('data/svdf_train.txt', 'w')
     test_file = file('data/svdf_test.txt', 'w')
     for ins_idx, y in enumerate(Y):
+        # line format:
+        #   label g_num u_num i_num <global_features> <user_features> <item_features>
         line = '%d' % y
         f_u = U[ins_idx]
         f_i = I[ins_idx]
         line += ' %d %d %d' % (0, len(f_u.indices), len(f_i.indices))
         
         # global feature.
+        pass
 
         # user feature.
         for idx in range(len(f_u.indices)):
@@ -84,6 +87,7 @@ if __name__ == '__main__':
             if max_user_feature < f_u.indices[idx]:
                 max_user_feature = f_u.indices[idx]
 
+        # item feature.
         for idx in range(len(f_i.indices)):
             line += ' %d:%.2f' % (f_i.indices[idx], f_i.data[idx])
             if max_movie_feature < f_i.indices[idx]:
@@ -97,4 +101,5 @@ if __name__ == '__main__':
 
     print >> sys.stderr, 'user_feature_count = %d' % (max_user_feature + 1)
     print >> sys.stderr, 'movie_feature_count = %d' % (max_movie_feature + 1)
+
 
