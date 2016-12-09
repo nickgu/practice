@@ -3,7 +3,7 @@
 movielens_path=~/lab/datasets/movielens/100k/ml-100k/
 
 #mkdir data
-#python dump_svdfeature_data.py $movielens_path
+python dump_svdfeature_data.py $movielens_path
 
 mkdir models
 rm -rf models/*

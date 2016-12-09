@@ -13,6 +13,7 @@
 import sys
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
+import tffm
 
 class Info: 
     def __init__(self, path='./'):
@@ -120,8 +121,18 @@ class SimpleFMLearner:
             y_train.append( rating )
 
         self.__v = DictVectorizer()
+
+
         X_train = self.__v.fit_transform(train_data)
-        self.__fm.fit(X_train,np.array(y_train))
+        y_train = np.array(y_train)
+
+        print >> sys.stderr, 'x_train.shape=%s, type=%s' % (str(X_train.shape), type(X_train))
+        print >> sys.stderr, 'y_train.shape=%s, type=%s' % (str(y_train.shape), type(y_train))
+        if isinstance(self.__fm, tffm.models.TFFMRegressor):
+            self.__fm.fit(X_train, y_train, show_progress=True)
+        else:
+            self.__fm.fit(X_train, y_train)
+        print >> sys.stderr, 'Train completed.'
 
     def predict(self, userid, itemid):
         d = self.__make_data(userid, itemid)

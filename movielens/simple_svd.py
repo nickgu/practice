@@ -129,8 +129,8 @@ if __name__=='__main__':
     # factor=16, use_info=True
     #   e20  : 19.17%
     #   e100 : 18.63% 
-    learner = simple_fm.SimpleFMLearner(iter=140, factor=6, use_info=True, path=path)
-    learner.fit(train)
+    #learner = simple_fm.SimpleFMLearner(iter=140, factor=6, use_info=True, path=path)
+    #learner.fit(train)
 
     # TEST: svdfeature
     # use svdfeature and make user-rated_item as feature, item_rated_user as feature.
@@ -162,6 +162,26 @@ if __name__=='__main__':
             )
     learner.fit(train)
     '''
+
+    # TEST tffm.
+    # https://github.com/geffy/tffm
+    from tffm import TFFMRegressor
+    import tensorflow as tf
+    learner = simple_fm.SimpleFMLearner(
+            external_fm = TFFMRegressor(        
+                order=2, 
+                rank=12, 
+                optimizer=tf.train.AdamOptimizer(learning_rate=0.001), 
+                n_epochs=300, 
+                batch_size=128,
+                init_std=0.001,
+                reg=0.001,
+                input_type='sparse'
+            ),
+            use_info = True,
+            path = path,
+            )
+    learner.fit(train)
 
     # calculate inverse count.
     order = []
