@@ -98,7 +98,7 @@ def inverse_ratio(order):
         # update previous count 
         prev_count[r] = prev_count.get(r, 0) + 1
 
-    inv_ratio = inverse_count * 100.  / total_count
+    inv_ratio = inverse_count * 1.  / total_count
     return inv_ratio, inverse_count, total_count
 
 
@@ -193,7 +193,7 @@ if __name__=='__main__':
     inv_ratio, inverse_count, total_count = inverse_ratio(order)
 
     print 'inverse_ratio: %.2f%% (%d/%d)' % (
-            inv_ratio, inverse_count, total_count)
+            inv_ratio * 100., inverse_count, total_count)
 
 
 

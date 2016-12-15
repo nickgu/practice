@@ -17,53 +17,95 @@ import tffm
 
 class Info: 
     def __init__(self, path='./'):
+        self.__global_user_info = {}
+        self.__global_movie_info = {} 
         self.__movie_info = {}
         self.__user_info = {}
-        for line in file(path + 'u.item').readlines():
-            (id, title, date, vdate, imdb, unknown, action, adventure, animation, children, comedy, crime, documentary, drama, fantacy,
-             noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split('|')
 
-            self.__movie_info[int(id)] = {
-                    'unknown' : int(unknown),
-                    'action': int(action),
-                    'adventure': int(adventure),
-                    'animation': int(animation),
-                    'children': int(children),
-                    'comedy': int(comedy),
-                    'crime' : int(crime),
-                    'documentary': int(documentary),
-                    'drama' : int(drama),
-                    'fantacy' : int(fantacy),
-                    'noir' : int(noir),
-                    'horror' : int(horror),
-                    'musical' : int(musical),
-                    'mystery' : int(mystery),
-                    'romance' : int(romance),
-                    'scifi' : int(scifi),
-                    'thriller' : int(thriller),
-                    'war' : int(war),
-                    'western' : int(western)
-                    }
+        OutputMovieProperty     = True
+        OutputUserProperty      = False
+        OutputNeighborInfo      = False
+        NeighborRateThreshold   = 5
 
-        for line in file(path + 'u.user').readlines():
-            id, age, gender, occupation, zip = line.strip().split('|')
-            self.__user_info[int(id)] = {
-                        'gender' : gender,
-                        'occupation' : occupation,
-                        'age' : str(int(age) / 5)
-                    }
+        UserFeatureAsGlobal     = False
+        UserFeatureAsUser       = True
 
+        MovieFeatureAsGlobal    = False
+        MovieFeatureAsMovie     = True
+
+        # OUTPUT MOVIE PROPERTY
+        if OutputMovieProperty:
+            for line in file(path + 'u.item').readlines():
+                (id, title, date, vdate, imdb, unknown, action, adventure, animation, children, comedy, crime, documentary, drama, fantacy,
+                 noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split('|')
+
+                feature_value = {
+                        'unknown' : int(unknown),
+                        'action': int(action),
+                        'adventure': int(adventure),
+                        'animation': int(animation),
+                        'children': int(children),
+                        'comedy': int(comedy),
+                        'crime' : int(crime),
+                        'documentary': int(documentary),
+                        'drama' : int(drama),
+                        'fantacy' : int(fantacy),
+                        'noir' : int(noir),
+                        'horror' : int(horror),
+                        'musical' : int(musical),
+                        'mystery' : int(mystery),
+                        'romance' : int(romance),
+                        'scifi' : int(scifi),
+                        'thriller' : int(thriller),
+                        'war' : int(war),
+                        'western' : int(western)
+                        }
+                
+                if MovieFeatureAsGlobal:
+                    self.__global_movie_info[int(id)] = feature_value
+                if MovieFeatureAsMovie:
+                    self.__movie_info[int(id)] = feature_value
+
+        # OUTPUT USER PROPERTY
+        if OutputUserProperty:
+            for line in file(path + 'u.user').readlines():
+                id, age, gender, occupation, zip = line.strip().split('|')
+                feature_value = {
+                            'gender' : gender,
+                            'occupation' : occupation,
+                            'age' : str(int(age) / 5)
+                        }
+                if UserFeatureAsGlobal:
+                    self.__global_user_info[int(id)] = feature_value
+                if UserFeatureAsUser:
+                    self.__user_info[int(id)] = feature_value
+
+
+        # OUTPUT NEIGHBORHOOD PROPERTY
         # try to add neighborhood info. (significant improval for svdfeature)
+        # use ua.base as oringinal data source.
         #   add user feature: movie_user_rated.
         #   add movie feature: user_rated.
-        # TODO: temp code.
-        for line in file(path + 'u.data').readlines()[:95000]:
-            uid, mid, rate, time = line.strip('\n').split('\t')
-            uid = int(uid)
-            mid = int(mid)
+        if OutputNeighborInfo:
+            neighbor_count = 0
+            for line in file(path + 'ua.base').readlines():
+                uid, mid, rate, time = line.strip('\n').split('\t')
+                uid = int(uid)
+                mid = int(mid)
+                rate = int(rate)
+                if rate < NeighborRateThreshold:
+                    continue
 
-            self.__user_info[uid]['movie_%s' % mid] = 1
-            self.__movie_info[mid]['user_%s' % uid] = 1
+                neighbor_count += 1
+                if uid not in self.__user_info:
+                    self.__user_info[uid] = {}
+                if mid not in self.__movie_info:
+                    self.__movie_info[mid] = {}
+
+                self.__user_info[uid]['movie_%s' % mid] = 1
+                self.__movie_info[mid]['user_%s' % uid] = 1
+
+            print >> sys.stderr, 'NeighborCount = %d' % neighbor_count
 
     def process(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})
@@ -74,6 +116,15 @@ class Info:
             data[key] = value
         return data
 
+    def process_global(self, userid, movieid, data):
+        # try to patch user feature to global features.
+        udata = self.__global_user_info.get(userid, {})
+        for key, value in udata.iteritems():
+            data[key] = value
+        mdata = self.__global_movie_info.get(movieid, {})
+        for key, value in mdata.iteritems():
+            data[key] = value
+        return data
 
     def process_user(self, userid, movieid, data):
         udata = self.__user_info.get(userid, {})

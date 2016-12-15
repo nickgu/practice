@@ -26,7 +26,7 @@ class Graph:
             self.__user_sim_dict = defaultdict(dict)
             self.__item_sim_dict = defaultdict(dict)
 
-            with open(path + '/u.data') as fp:
+            with open(path + '/ua.base') as fp:
                 for line in fp.readlines():
                     user, item, rating, time = line.strip().split('\t')
                     rating = float(rating)
@@ -81,17 +81,21 @@ class Graph:
                 len(item_ratings) )
 
         print 'user rating in sim items:'
-        for s_item, s_sim in self.item_best_sim(item, count=30):
+        max_output_count = 10
+        c = 0
+        for s_item, s_sim in self.item_best_sim(item, count=1000):
             if (user, s_item) in self.__edges:
-                print '%s sim=%.3f rate=%s' % (s_item, s_sim, self.__edges[user, s_item])
-                items_info.debug(s_item, brief=True)
+                print '%s sim=%.3f rate=%s\t%s' % (s_item, s_sim, self.__edges[user, s_item], items_info.debug(s_item, brief=True))
+                c += 1
+                if c >= max_output_count: break
 
         print 'items rating by sim user:'
-        for s_user, s_sim in self.user_best_sim(user, count=30):
+        c = 0
+        for s_user, s_sim in self.user_best_sim(user, count=1000):
             if (s_user, item) in self.__edges:
-                print '%s sim=%.3f rate=%s' % (s_user, s_sim, self.__edges[s_user, item])
-                users_info.debug(s_user, brief=True)
-
+                print '%s sim=%.3f rate=%s\t%s' % (s_user, s_sim, self.__edges[s_user, item], users_info.debug(s_user, brief=True))
+                c += 1
+                if c >= max_output_count: break
 
     def __calc_user_sim(self, u1, u2):
         v1 = self.__users[u1]
@@ -130,7 +134,7 @@ class Graph:
 class MovieManager:
     def __init__(self, path):
         self.__movie_info = {}
-        for line in file(path + 'u.item').readlines():
+        for line in file(path + '/u.item').readlines():
             (id, title, date, vdate, imdb, unknown, action, adventure, animation, children, comedy, crime, documentary, drama, fantacy,
              noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split('|')
 
@@ -161,15 +165,15 @@ class MovieManager:
     def debug(self, movie, brief=False):
         udata = self.__movie_info.get(movie, {})
         if brief:
-            print 'movie: %s { %s }' % (movie, ', '.join(map(lambda x:'%s:%s'%(x[0][:4], x[1]), udata.iteritems())))
+            return 'movie: %s { %s }' % (movie, ', '.join(map(lambda x:'%s:%s'%(x[0][:4], x[1]), udata.iteritems())))
         else:
-            print 'movie: %s {\n%s\n}' % (movie, ',\n'.join(map(lambda x:'  %s:%s'%(x[0], x[1]), udata.iteritems())))
+            return 'movie: %s {\n%s\n}' % (movie, ',\n'.join(map(lambda x:'  %s:%s'%(x[0], x[1]), udata.iteritems())))
 
 
 class UserManager:
     def __init__(self, path):
         self.__user_info = {}
-        with open(path + 'u.user') as fp:
+        with open(path + '/u.user') as fp:
             for line in fp.readlines():
                 id, age, gender, occupation, zip = line.strip().split('|')
                 self.__user_info[id] = {
@@ -182,13 +186,14 @@ class UserManager:
     def debug(self, user, brief=False):
         udata = self.__user_info.get(user, {})
         if brief:
-            print 'user: %s { %s }' % (user, ', '.join(map(lambda x:'%s:%s'%(x[0][:4], x[1]), udata.iteritems())))
+            return 'user: %s { %s }' % (user, ', '.join(map(lambda x:'%s:%s'%(x[0][:4], x[1]), udata.iteritems())))
         else:
-            print 'user: %s {\n%s\n}' % (user, ',\n'.join(map(lambda x:'  %s:%s'%(x[0], x[1]), udata.iteritems())))
+            return 'user: %s {\n%s\n}' % (user, ',\n'.join(map(lambda x:'  %s:%s'%(x[0], x[1]), udata.iteritems())))
 
 
 if __name__ == '__main__':
     path = sys.argv[1]
+    print 'Waiting for load data ...'
     graph = Graph(path)
     movies = MovieManager(path)
     users = UserManager(path) 
@@ -198,6 +203,6 @@ if __name__ == '__main__':
         line = sys.stdin.readline()
         user, item = line.strip().split(' ')
         print 'user=%s, item=%s' % (user, item) 
-        users.debug(user)
-        movies.debug(item)
+        print users.debug(user)
+        print movies.debug(item)
         graph.debug(user, item, users, movies)
