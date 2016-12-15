@@ -14,6 +14,7 @@ import sys
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
 import tffm
+import config
 
 class Info: 
     def __init__(self, path='./'):
@@ -24,7 +25,7 @@ class Info:
 
         OutputMovieProperty     = True
         OutputUserProperty      = False
-        OutputNeighborInfo      = False
+        OutputNeighborInfo      = True
         NeighborRateThreshold   = 5
 
         UserFeatureAsGlobal     = False
@@ -35,32 +36,39 @@ class Info:
 
         # OUTPUT MOVIE PROPERTY
         if OutputMovieProperty:
-            for line in file(path + 'u.item').readlines():
-                (id, title, date, vdate, imdb, unknown, action, adventure, animation, children, comedy, crime, documentary, drama, fantacy,
-                 noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split('|')
+            for line in file(path + config.ItemData).readlines():
+                if config.DataType == config.D_100k:
+                    (id, title, date, vdate, imdb, unknown, action, adventure, animation, children, comedy, crime, documentary, drama, fantacy,
+                     noir, horror, musical, mystery, romance, scifi, thriller, war, western) = line.strip('\n').split(config.PropertySeperator)
 
-                feature_value = {
-                        'unknown' : int(unknown),
-                        'action': int(action),
-                        'adventure': int(adventure),
-                        'animation': int(animation),
-                        'children': int(children),
-                        'comedy': int(comedy),
-                        'crime' : int(crime),
-                        'documentary': int(documentary),
-                        'drama' : int(drama),
-                        'fantacy' : int(fantacy),
-                        'noir' : int(noir),
-                        'horror' : int(horror),
-                        'musical' : int(musical),
-                        'mystery' : int(mystery),
-                        'romance' : int(romance),
-                        'scifi' : int(scifi),
-                        'thriller' : int(thriller),
-                        'war' : int(war),
-                        'western' : int(western)
-                        }
-                
+                    feature_value = {
+                            'unknown' : int(unknown),
+                            'action': int(action),
+                            'adventure': int(adventure),
+                            'animation': int(animation),
+                            'children': int(children),
+                            'comedy': int(comedy),
+                            'crime' : int(crime),
+                            'documentary': int(documentary),
+                            'drama' : int(drama),
+                            'fantacy' : int(fantacy),
+                            'noir' : int(noir),
+                            'horror' : int(horror),
+                            'musical' : int(musical),
+                            'mystery' : int(mystery),
+                            'romance' : int(romance),
+                            'scifi' : int(scifi),
+                            'thriller' : int(thriller),
+                            'war' : int(war),
+                            'western' : int(western)
+                            }
+                    
+                else:
+                    (id, title, types) = line.strip('\n').split(config.PropertySeperator)
+                    feature_value = {}
+                    for tag in types.split('|'):
+                        feature_value[tag] = 1
+
                 if MovieFeatureAsGlobal:
                     self.__global_movie_info[int(id)] = feature_value
                 if MovieFeatureAsMovie:
@@ -68,8 +76,8 @@ class Info:
 
         # OUTPUT USER PROPERTY
         if OutputUserProperty:
-            for line in file(path + 'u.user').readlines():
-                id, age, gender, occupation, zip = line.strip().split('|')
+            for line in file(path + config.UserData).readlines():
+                id, age, gender, occupation, zip = line.strip().split(config.PropertySeperator)
                 feature_value = {
                             'gender' : gender,
                             'occupation' : occupation,
@@ -88,8 +96,8 @@ class Info:
         #   add movie feature: user_rated.
         if OutputNeighborInfo:
             neighbor_count = 0
-            for line in file(path + 'ua.base').readlines():
-                uid, mid, rate, time = line.strip('\n').split('\t')
+            for line in file(path + config.TrainData).readlines():
+                uid, mid, rate, time = line.strip('\n').split(config.Seperator)
                 uid = int(uid)
                 mid = int(mid)
                 rate = int(rate)
@@ -97,13 +105,15 @@ class Info:
                     continue
 
                 neighbor_count += 1
-                if uid not in self.__user_info:
-                    self.__user_info[uid] = {}
-                if mid not in self.__movie_info:
-                    self.__movie_info[mid] = {}
+                if uid not in self.__global_user_info:
+                    self.__global_user_info[uid] = {}
+                '''
+                if mid not in self.__global_movie_info:
+                    self.__global_movie_info[mid] = {}
+                '''
 
-                self.__user_info[uid]['movie_%s' % mid] = 1
-                self.__movie_info[mid]['user_%s' % uid] = 1
+                self.__global_user_info[uid]['movie_%s' % mid] = 1
+                #self.__global_movie_info[mid]['user_%s' % uid] = 1
 
             print >> sys.stderr, 'NeighborCount = %d' % neighbor_count
 

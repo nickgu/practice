@@ -1,6 +1,7 @@
 #! /bin/sh
 
-movielens_path=~/lab/datasets/movielens/100k/ml-100k/
+#movielens_path=./ml-100k/
+movielens_path=./ml-1m/
 
 #mkdir data
 if [ "$1" == "no_dump" ]; then

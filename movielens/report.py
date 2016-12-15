@@ -5,7 +5,15 @@ import math
 import sklearn.metrics as metrics
 from simple_svd import inverse_ratio
 
-test_file = file('data/svdf_test.txt')
+# test for ml-100k.
+#svd_test_file = 'data/svdf_test.txt'
+#original_ratings = 'ml-100k/ua.test'
+
+# test for ml-1m.
+svd_test_file = 'data/svdf_test.txt'
+original_ratings = 'ml-1m/test.dat'
+
+test_file = file(svd_test_file)
 if len(sys.argv) > 1:
     print >> sys.stderr, 'TEST = %s' % sys.argv[1]
     test_file = file(sys.argv[1])
@@ -25,7 +33,7 @@ print >> sys.stderr, 'inverse_ratio = %.3f%%' % (ir * 100.)
 print 
 print >> sys.stderr, 'ERROR SAMPLE'
 
-test_data = file('ml-100k/ua.test').readlines()
+test_data = file(original_ratings).readlines()
 idx_diff = [ (idx, abs(pred-label), label, pred) for idx, (pred, label) in enumerate(order) ]
 for idx, diff, label, pred in sorted(idx_diff, key=lambda x:-x[1]):
     if diff < 3:

@@ -16,11 +16,12 @@ import random
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
 
+import config
 from simple_fm import Info
 
 
 def load_data(filename, feature_manager):
-    sep = '\t'
+    sep = config.Seperator
 
     data = []
     # load data.
@@ -102,8 +103,8 @@ if __name__ == '__main__':
     path = sys.argv[1] + '/'
     feature_manager = Info(path)
 
-    train_G, train_U, train_I, train_Y = load_data(filename = path + '/ua.base', feature_manager=feature_manager)
-    test_G, test_U, test_I, test_Y = load_data(filename = path + '/ua.test', feature_manager=feature_manager)
+    train_G, train_U, train_I, train_Y = load_data(filename = path + config.TrainData, feature_manager=feature_manager)
+    test_G, test_U, test_I, test_Y = load_data(filename = path + config.TestData, feature_manager=feature_manager)
 
     global_dv = DictVectorizer()
     user_dv = DictVectorizer()
