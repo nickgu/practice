@@ -26,13 +26,15 @@ class Info:
         OutputMovieProperty     = True
         OutputUserProperty      = False
         OutputNeighborInfo      = True
-        NeighborRateThreshold   = 5
 
         UserFeatureAsGlobal     = False
         UserFeatureAsUser       = True
 
         MovieFeatureAsGlobal    = False
         MovieFeatureAsMovie     = True
+
+        NeighborRateThreshold   = 2
+        #NeighborAsGlobal        = False
 
         # OUTPUT MOVIE PROPERTY
         if OutputMovieProperty:
