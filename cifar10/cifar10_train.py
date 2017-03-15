@@ -17,8 +17,8 @@ class Tester:
         
         self.sess = tf.Session()
         self.s_test_precision = tf.placeholder(tf.float32)
-        a = tf.scalar_summary('validation/precision/test', self.s_test_precision)
-        self.merged = tf.merge_summary([a])
+        a = tf.summary.scalar('validation/precision/test', self.s_test_precision)
+        self.merged = tf.summary.merge([a])
 
     def test(self, predict, summary_writer=None, iteration=0):
         pred_y = net.predict(test_x)
@@ -53,13 +53,13 @@ class Preprocessor:
         distorted_image = tf.image.random_flip_left_right(distorted_image)
         distorted_image = tf.image.random_brightness(distorted_image, max_delta=63)
         distorted_image = tf.image.random_contrast(distorted_image, lower=0.2, upper=1.8)
-        distorted_image = tf.image.per_image_whitening(distorted_image)
+        distorted_image = tf.image.per_image_standardization(distorted_image)
 
         return distorted_image, queue_y
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
-    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_cnn7_residual')
+    net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_tf_tutor')
 
     temp_data = pydev.TempStorage('normal_data', 'temp/normal_data.ts')
     if temp_data.has_data():
@@ -82,8 +82,9 @@ if __name__ == '__main__':
     CropSize = 24
     image_in = tf.placeholder(tf.uint8, shape=[32, 32, 3])
     image = tf.cast(image_in, tf.float32)
+
     resize_image = tf.image.resize_image_with_crop_or_pad(image, CropSize, CropSize)
-    test_image = tf.image.per_image_whitening(resize_image)
+    test_image = tf.image.per_image_standardization(resize_image)
     
     processed_X = []
     for image in test_x:
