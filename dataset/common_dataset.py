@@ -56,7 +56,9 @@ class IrisData(DataSet):
                 if len(arr)!=5:
                     continue
                 x = numpy.array( map(lambda x:float(x), arr[:4]) )
-                y = seeker.seek(arr[4])
+                yidx = seeker.seek(arr[4])
+                y = numpy.zeros(3)
+                y[yidx] = 1.0
             
                 X.append(x)
                 Y.append(y)
