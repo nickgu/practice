@@ -4,12 +4,14 @@
 # 
 
 import numpy as np
+import pydev
 
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.utils.data
 
 import sys
 sys.path.append('../')
@@ -19,45 +21,84 @@ import dataset
 class SoftmaxNet(nn.Module):
     def __init__(self):
         super(SoftmaxNet, self).__init__()
-        self.fc = nn.Linear(4, 3)
+        self.fc1 = nn.Linear(4, 128)
+        self.fch = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(64, 3)
+        
 
     def forward(self, x):
-        return F.softmax(  self.fc(x) )
+        x = F.relu( self.fc1(x) )
+        x = F.relu( self.fch(x) )
+        x = F.softmax( self.fc2(x) )
+        return x
 
 if __name__=='__main__':
     iris_data = dataset.IrisData(label_onehot_encoding=False)
     X, Y = iris_data.data()
+    print X.max()
+    X = X / X.max()
     print X.shape
     print Y.shape
 
 
     net = SoftmaxNet()
     criterion = nn.CrossEntropyLoss()
-    #optimizer = optim.SGD(net.parameters(), lr=0.05, momentum=0.2)
-    optimizer = optim.Adam(net.parameters(), lr=0.01)
+    optimizer = optim.SGD(net.parameters(), lr=0.02)
+    #optimizer = optim.Adam(net.parameters(), lr=0.1)
 
     dtype = torch.FloatTensor
-    inputs = torch.from_numpy(X)
-    labels = torch.from_numpy(Y)
-    inputs = Variable(inputs).type(dtype)
-    labels = Variable(labels).type(torch.LongTensor)
+    loader = torch.utils.data.DataLoader(zip(X, Y), shuffle=True, batch_size=150)
 
-    for t in range(500):  # loop over the dataset multiple times
-        # zero the parameter gradients
-        optimizer.zero_grad()
+    epoch_num = 0
+    while 1:
+        l=sys.stdin.readline()
+        try:
+            n = int(l)
+        except:
+            break
 
-        # forward + backward + optimize
-        outputs = net(inputs)
+        for i in range(n):
+            epoch_num += 1
+            
+            data_iter = iter(loader)
+            run_loss = 0
+            right = 0
+            total = 0
+            for t, (x, y) in enumerate(data_iter):
+                inputs = Variable(x).type(dtype)
+                labels = Variable(y).type(torch.LongTensor)
 
-        # temp test precision
-        pred = outputs.max(1, keepdim=True)[1]
-        p = pred.eq(labels.view_as(pred)).sum()
-        prec = 100. * p.data[0] / 150.
+                # zero the parameter gradients
+                optimizer.zero_grad()
 
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+                # forward + backward + optimize
+                outputs = net(inputs)
 
-        # print statistics
-        print('[iter = %d] loss: %.3f p=%.2f%% (%d)' %
-              (t, loss.data[0], prec, p.data[0]))
+                # temp test precision
+                pred = outputs.max(1, keepdim=True)[1]
+                p = pred.eq(labels.view_as(pred)).sum()
+                right += p.data[0]
+                total += len(pred)
+                precision = right * 100.0 / total
+
+                loss = criterion(outputs, labels)
+                run_loss += loss.data[0]
+                loss.backward()
+                optimizer.step()
+
+            # print statistics
+            ops = 'p=%.2f%% (%d/%d)' % (precision, right, total)
+            ps = ops
+            if right >= 145:
+                ps = pydev.ColorString.green(ops)
+            if right >= 147:
+                ps = pydev.ColorString.cyan(ops)
+            if right >= 148:
+                ps = pydev.ColorString.red(ops)
+            if right >= 149:
+                ps = pydev.ColorString.yellow(ops)
+
+
+            print('[%d, %d] loss: %.5f %s' %
+              (epoch_num, n, run_loss, ps))
+
