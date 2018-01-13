@@ -40,10 +40,12 @@ class DataSet(object):
 
 
 class IrisData(DataSet):
-    def __init__(self, root_path = './dataset'):
+    def __init__(self, root_path = './dataset', label_onehot_encoding=True):
         DataSet.__init__(self, 'iris', download_urls = [(
             'http://archive.ics.uci.edu/ml/machine-learning-databases/iris/bezdekIris.data', 'iris.data'
             )], root_path=root_path)
+
+        self.__label_onehot_encoding = label_onehot_encoding
     
     def _read_data(self):
         X = []
@@ -56,12 +58,16 @@ class IrisData(DataSet):
                 if len(arr)!=5:
                     continue
                 x = numpy.array( map(lambda x:float(x), arr[:4]) )
-                yidx = seeker.seek(arr[4])
-                y = numpy.zeros(3)
-                y[yidx] = 1.0
-            
                 X.append(x)
-                Y.append(y)
+
+                yidx = seeker.seek(arr[4])
+                if self.__label_onehot_encoding:
+                    y = numpy.zeros(3)
+                    y[yidx] = 1.0
+                
+                    Y.append(y)
+                else:
+                    Y.append(yidx)
 
         return numpy.array(X), numpy.array(Y)
 
