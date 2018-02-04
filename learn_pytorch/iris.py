@@ -51,6 +51,7 @@ if __name__=='__main__':
 
     epoch_num = 0
     while 1:
+        print >> sys.stderr, 'input n epoch to run..'
         l=sys.stdin.readline()
         try:
             n = int(l)
@@ -75,7 +76,10 @@ if __name__=='__main__':
                 outputs = net(inputs)
 
                 # temp test precision
-                pred = outputs.max(1, keepdim=True)[1]
+                # seems different max need keepdim..
+                #pred = outputs.max(1, keepdim=True)[1]
+                pred = outputs.max(1)[1]
+
                 p = pred.eq(labels.view_as(pred)).sum()
                 right += p.data[0]
                 total += len(pred)
