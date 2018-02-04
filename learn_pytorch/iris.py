@@ -21,8 +21,8 @@ import dataset
 class SoftmaxNet(nn.Module):
     def __init__(self):
         super(SoftmaxNet, self).__init__()
-        self.fc1 = nn.Linear(4, 128)
-        self.fch = nn.Linear(128, 64)
+        self.fc1 = nn.Linear(4, 1024)
+        self.fch = nn.Linear(1024, 64)
         self.fc2 = nn.Linear(64, 3)
         
 
@@ -50,6 +50,8 @@ if __name__=='__main__':
     loader = torch.utils.data.DataLoader(zip(X, Y), shuffle=True, batch_size=150)
 
     epoch_num = 0
+    best_hit = 0
+    best_ps = ''
     while 1:
         print >> sys.stderr, 'input n epoch to run..'
         l=sys.stdin.readline()
@@ -102,7 +104,18 @@ if __name__=='__main__':
             if right >= 149:
                 ps = pydev.ColorString.yellow(ops)
 
+            if right > best_hit:
+                best_hit = right
+                best_ps = ps
+   
+            print('[%d, %d] loss: %.5f %s curbest=%s' %
+              (epoch_num, n, run_loss, ps, best_ps))
+            if best_hit == 150:
+                # we found the best answers!.
+                break
 
-            print('[%d, %d] loss: %.5f %s' %
-              (epoch_num, n, run_loss, ps))
+        if best_hit == 150:
+            # we found the best answers!.
+            break
 
+    
