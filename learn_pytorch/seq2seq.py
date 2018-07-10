@@ -93,7 +93,7 @@ if __name__=='__main__':
         eng, fra = line.strip().split('\t')
         datasets.append( (eng, unicodeToAscii(fra)) )
 
-    print len(datasets)
+    print 'a'
     
             
 
