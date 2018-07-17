@@ -316,7 +316,7 @@ def trainIters(encoder, decoder, n_iters, print_every=100, plot_every=100, learn
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
 
-        evaluateRandomly(encoder1, decoder)
+    evaluateRandomly(encoder1, decoder)
 
     #showPlot(plot_losses)
 
@@ -331,7 +331,7 @@ if __name__=='__main__':
     encoder1 = gru.EncoderRNN(input_lang.n_words, hidden_size).to(device)
     attn_decoder1 = gru.AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-    trainIters(encoder1, attn_decoder1, 75000, print_every=10)
+    trainIters(encoder1, attn_decoder1, 75000, print_every=100)
 
 
 
