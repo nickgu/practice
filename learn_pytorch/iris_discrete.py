@@ -21,15 +21,16 @@ import dataset
 class SoftmaxNet(nn.Module):
     def __init__(self):
         super(SoftmaxNet, self).__init__()
-        self.fc1 = nn.Linear(400, 1024)
-        self.fch = nn.Linear(1024, 64)
-        self.fc2 = nn.Linear(64, 3)
-        
+        self.fc1 = nn.Linear(400, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 64)
+        self.fc4 = nn.Linear(64, 3)
 
     def forward(self, x):
-        x = F.relu( self.fc1(x) )
-        x = F.relu( self.fch(x) )
-        x = F.softmax( self.fc2(x) )
+        x0 = F.relu( self.fc1(x) )
+        x = F.relu( self.fc2(x0) )
+        x = F.relu( self.fc3(x) )
+        x = F.softmax( self.fc4(x + x0) )
         return x
 
 if __name__=='__main__':
@@ -49,8 +50,10 @@ if __name__=='__main__':
 
     net = SoftmaxNet()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.02)
-    #optimizer = optim.Adam(net.parameters(), lr=0.1)
+
+    optimizer_sgd01 = optim.SGD(net.parameters(), lr=0.1)
+    optimizer_sgd001 = optim.SGD(net.parameters(), lr=0.01)
+    optimizer_adam = optim.Adam(net.parameters(), lr=0.1)
 
     dtype = torch.FloatTensor
     loader = torch.utils.data.DataLoader(zip(new_X, Y), shuffle=True, batch_size=150)
@@ -58,13 +61,24 @@ if __name__=='__main__':
     epoch_num = 0
     best_hit = 0
     best_ps = ''
+    optimizer = optimizer_sgd01
     while 1:
         print >> sys.stderr, 'input n epoch to run..'
         l=sys.stdin.readline()
         try:
+            if ',' in l:
+                l, op = l.strip().split(',')
+                if op == 'adam':
+                    optimizer = optimizer_adam
+                elif op == 'sgd001':
+                    optimizer = optimizer_sgd001
+                elif op == 'sgd01':
+                    optimizer = optimizer_sgd01
             n = int(l)
         except:
             break
+
+        print optimizer
 
         for i in range(n):
             epoch_num += 1
@@ -114,8 +128,8 @@ if __name__=='__main__':
                 best_hit = right
                 best_ps = ps
    
-            print('[%d, %d] loss: %.5f %s curbest=%s' %
-              (epoch_num, n, run_loss, ps, best_ps))
+            print('[%d, %d/%d] loss: %.5f %s curbest=%s' %
+              (epoch_num, i, n, run_loss, ps, best_ps))
             if best_hit == 150:
                 # we found the best answers!.
                 break
