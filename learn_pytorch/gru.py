@@ -15,7 +15,48 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-MAX_LENGTH = 10
+class Lang:
+    def __init__(self, name, device=torch.device('cpu')):
+        self.name = name
+        self.word2index = {}
+        self.word2count = {}
+        self.index2word = {}
+        self.n_words = 0
+        self.device = device
+
+    def wordIndex(self, word):
+        if word in self.word2index:
+            return self.word2index[word]
+        return -1
+
+    def addSentence(self, sentence):
+        # sentence is generator
+        indice = []
+        for word in sentence:
+            indice.append( self.addWord(word) )
+
+        return torch.tensor(indice, dtype=torch.long, device=self.device).view(-1, 1)
+
+    def addWord(self, word):
+        if word not in self.word2index:
+            self.word2index[word] = self.n_words
+            self.word2count[word] = 1
+            self.index2word[self.n_words] = word
+            self.n_words += 1
+        else:
+            self.word2count[word] += 1
+        return self.word2index[word]
+
+    def indexesFromSentence(self, sentence):
+        return [self.word2index[word] for word in sentence]
+
+
+    def tensorFromSentence(self, sentence):
+        indexes = indexesFromSentence(self, sentence)
+        return torch.tensor(indexes, dtype=torch.long, device=self.device).view(-1, 1)
+
+
+MAX_LENGTH = 100
 
 # Gru-RNN model.
 class EncoderRNN(nn.Module):
