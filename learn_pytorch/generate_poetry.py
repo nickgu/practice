@@ -62,7 +62,7 @@ if __name__=='__main__':
 
     print len(datas)
 
-    epoch_count = 1000
+    epoch_count = 10
     hidden_size = 32
 
     encoder = gru.EncoderRNN(lang.n_words, hidden_size)
@@ -77,9 +77,9 @@ if __name__=='__main__':
         training_pairs = [] #[(poet[:-1], poet[1:]) for poet in datas]
         for poet in datas:
             for end in range(1, len(poet)-1):
-                training_pairs.append( (poet[:end+1], poet[1:end+2]) )
+                training_pairs.append( (poet[:end+1], poet[end+1:end+2]) )
 
-        print 'traning samples: %s' % (str(training_pairs[0]))
+        print 'traning samples: %s' % (str(training_pairs[0][0]))
         for i in range(epoch_count):
             print >> sys.stderr, 'epoch: %d' % i
             gru.trainIters(training_pairs, encoder, decoder)
