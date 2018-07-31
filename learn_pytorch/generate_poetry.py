@@ -21,7 +21,8 @@ import torch
 class PoetryRepo:
     def __init__(self, path='dataset/poetry'):
         self.__all_poetry = []
-        test_count = 20
+        test_count = 10000
+        output_file = file('poet.debug.txt', 'w')
         for filename in os.listdir(path):
             if filename.startswith('poet.'):
                 with file(path + '/' + filename) as fd:
@@ -34,6 +35,7 @@ class PoetryRepo:
                                     if len(u)>0:
                                         #print u.encode('utf-8')
                                         self.__all_poetry.append( u ) 
+                                        print >> output_file, u.encode('utf8')
                             if test_count > 0 and len(self.__all_poetry)>=test_count:
                                 break
                 if test_count > 0 and len(self.__all_poetry)>=test_count:
@@ -60,40 +62,55 @@ if __name__=='__main__':
         poets.append(poet)
         datas.append(vec)
 
-    print len(datas)
+    print >> sys.stderr, len(datas)
 
-    epoch_count = 10
+    epoch_count = 1000
     hidden_size = 32
 
     encoder = gru.EncoderRNN(lang.n_words, hidden_size)
     #decoder = gru.AttnDecoderRNN(lang.n_words, hidden_size)
     decoder = gru.AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1)
 
-    if len(sys.argv)>1 and sys.argv[1] == '--load':
+    argset = set()
+    if len(sys.argv)>1:
+        argset = set(sys.argv[1:])
+
+    if '--load' in argset:
+        print >> sys.stderr, 'load model'
         encoder.load_state_dict(torch.load('encoder.pkl'))
         decoder.load_state_dict(torch.load('decoder.pkl'))
 
-    else:
-        training_pairs = [] #[(poet[:-1], poet[1:]) for poet in datas]
-        for poet in datas:
-            for end in range(1, len(poet)-1):
-                training_pairs.append( (poet[:end+1], poet[end+1:end+2]) )
+    if '--train' in argset:
+        print >> sys.stderr, 'training'
+        training_pairs = [(poet[:-1], poet[1:]) for poet in datas]
 
-        print 'traning samples: %s' % (str(training_pairs[0][0]))
+        print >> sys.stderr, 'traning samples: %s' % (str(training_pairs[0][0]))
         for i in range(epoch_count):
             print >> sys.stderr, 'epoch: %d' % i
             gru.trainIters(training_pairs, encoder, decoder)
+
+            ri = random.randint(0, len(poets)-1)
+            input = poets[ri][:-1]
+            output, output_hidden = gru.evaluate(input, encoder, decoder, lang, lang)
+            print >> sys.stderr, '>>> ' + u''.join(input).encode('utf8')
+            print >> sys.stderr, '>>> ' + ','.join(map(lambda x:'%d'%x, datas[ri][:-1]))
+            print >> sys.stderr, '--- ' + u''.join(poets[ri][1:]).encode('utf8')
+            print >> sys.stderr, '<<< ' + u''.join(output).encode('utf8')
+
 
         print >> sys.stderr, 'train over.'
         torch.save(encoder.state_dict(), 'encoder.pkl')
         torch.save(decoder.state_dict(), 'decoder.pkl')
         print >> sys.stderr, 'save model.'
 
-    input = poets[0][:-1]
+
+    ri = random.randint(0, len(poets)-1)
+    input = poets[ri][:-1]
     output, output_hidden = gru.evaluate(input, encoder, decoder, lang, lang)
-    print '>>> ' + u''.join(input).encode('utf-8')
-    print '>>> ' + ','.join(map(lambda x:'%d'%x, datas[0][:-1]))
-    print '<<< ' + u''.join(output).encode('utf-8')
+    print >> sys.stderr, '>>> ' + u''.join(input).encode('utf8')
+    print >> sys.stderr, '>>> ' + ','.join(map(lambda x:'%d'%x, datas[ri][:-1]))
+    print >> sys.stderr, '--- ' + u''.join(poets[ri][1:]).encode('utf8')
+    print >> sys.stderr, '<<< ' + u''.join(output).encode('utf8')
 
 
     print >> sys.stderr, 'read char to write poet.'
@@ -101,11 +118,10 @@ if __name__=='__main__':
     first_char = input_line[0]
     print >> sys.stderr, 'you input [%s] to generate.' % (first_char.encode('utf8'))
 
-    gen = ['SOS', first_char]
-    for i in range(20):
-        output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
-        print u''.join(output).encode('utf-8')
-        gen.append(output[-1])
+    gen = [first_char, 'EOS']
+    output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
+    print >> sys.stderr, u''.join(output).encode('utf-8')
+    gen.append(output[-1])
 
 
 
