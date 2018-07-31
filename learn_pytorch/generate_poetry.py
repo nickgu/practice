@@ -15,6 +15,7 @@ import sys
 import random
 
 import gru
+import torch
 
 
 class PoetryRepo:
@@ -61,17 +62,32 @@ if __name__=='__main__':
 
     print len(datas)
 
-    hidden_size = 16
+    epoch_count = 1000
+    hidden_size = 32
 
     encoder = gru.EncoderRNN(lang.n_words, hidden_size)
     #decoder = gru.AttnDecoderRNN(lang.n_words, hidden_size)
     decoder = gru.AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1)
-    training_pairs = [(poet[:-1], poet[1:]) for poet in datas]
 
-    print 'traning samples: %s' % (str(training_pairs[0]))
-    for i in range(3000):
-        print >> sys.stderr, 'epoch: %d' % i
-        gru.trainIters(training_pairs, encoder, decoder)
+    if len(sys.argv)>1 and sys.argv[1] == '--load':
+        encoder.load_state_dict(torch.load('encoder.pkl'))
+        decoder.load_state_dict(torch.load('decoder.pkl'))
+
+    else:
+        training_pairs = [] #[(poet[:-1], poet[1:]) for poet in datas]
+        for poet in datas:
+            for end in range(1, len(poet)-1):
+                training_pairs.append( (poet[:end+1], poet[1:end+2]) )
+
+        print 'traning samples: %s' % (str(training_pairs[0]))
+        for i in range(epoch_count):
+            print >> sys.stderr, 'epoch: %d' % i
+            gru.trainIters(training_pairs, encoder, decoder)
+
+        print >> sys.stderr, 'train over.'
+        torch.save(encoder.state_dict(), 'encoder.pkl')
+        torch.save(decoder.state_dict(), 'decoder.pkl')
+        print >> sys.stderr, 'save model.'
 
     input = poets[0][:-1]
     output, output_hidden = gru.evaluate(input, encoder, decoder, lang, lang)
@@ -80,18 +96,16 @@ if __name__=='__main__':
     print '<<< ' + u''.join(output).encode('utf-8')
 
 
-    #print >> sys.stderr, 'read char to write poet.'
-    #input_line = sys.stdin.readline().decode('utf-8')
-    #first_char = input_line[0]
-    #print >> sys.stderr, 'you input [%s] to generate.' % (first_char.encode('utf8'))
+    print >> sys.stderr, 'read char to write poet.'
+    input_line = sys.stdin.readline().decode('utf-8')
+    first_char = input_line[0]
+    print >> sys.stderr, 'you input [%s] to generate.' % (first_char.encode('utf8'))
 
-    '''
-    gen = ['SOS']
+    gen = ['SOS', first_char]
     for i in range(20):
         output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
         print u''.join(output).encode('utf-8')
         gen.append(output[-1])
-    '''
 
 
 

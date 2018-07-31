@@ -272,7 +272,7 @@ def evaluate(sentence, encoder, decoder, input_lang, output_lang, max_length=MAX
             decoder_attentions[di] = decoder_attention.data
             topv, topi = decoder_output.data.topk(1)
             if topi.item() == EOS_token:
-                decoded_words.append('<EOS>')
+                decoded_words.append('EOS')
                 break
             else:
                 decoded_words.append(output_lang.index2word[topi.item()])
