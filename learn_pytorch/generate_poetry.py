@@ -21,7 +21,7 @@ import torch
 class PoetryRepo:
     def __init__(self, path='dataset/poetry'):
         self.__all_poetry = []
-        test_count = 10000
+        test_count = 100
         output_file = file('poet.debug.txt', 'w')
         for filename in os.listdir(path):
             if filename.startswith('poet.'):
@@ -114,11 +114,10 @@ if __name__=='__main__':
 
 
     print >> sys.stderr, 'read char to write poet.'
-    input_line = sys.stdin.readline().decode('utf-8')
-    first_char = input_line[0]
-    print >> sys.stderr, 'you input [%s] to generate.' % (first_char.encode('utf8'))
+    input_line = sys.stdin.readline().decode('utf-8').strip()
+    print >> sys.stderr, 'you input [%s] to generate.' % (input_line.encode('utf8'))
 
-    gen = [first_char, 'EOS']
+    gen = list(input_line) + ['EOS']
     output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
     print >> sys.stderr, u''.join(output).encode('utf-8')
     gen.append(output[-1])
