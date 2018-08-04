@@ -88,7 +88,7 @@ class EncoderRNN(nn.Module):
 
 # Simple Gru-Decoder.
 class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size):
+    def __init__(self, output_size, hidden_size):
         super(DecoderRNN, self).__init__()
         self.hidden_size = hidden_size
 
@@ -279,7 +279,117 @@ def evaluate(sentence, encoder, decoder, input_lang, output_lang, max_length=MAX
 
             decoder_input = topi.squeeze().detach()
 
-        return decoded_words, decoder_attentions[:di + 1]
+        return decoded_words
+
+############## RNN #################3
+
+
+def trainRnn(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
+    encoder_hidden = encoder.initHidden(device=device)
+
+    encoder_optimizer.zero_grad()
+    decoder_optimizer.zero_grad()
+
+    input_length = input_tensor.size(0)
+    target_length = target_tensor.size(0)
+
+    loss = 0
+
+    for ei in range(input_length):
+        encoder_output, encoder_hidden = encoder(
+            input_tensor[ei], encoder_hidden)
+
+    decoder_input = torch.tensor([[SOS_token]], device=device)
+    decoder_hidden = encoder_hidden
+
+    for di in range(target_length):
+        decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+        topv, topi = decoder_output.topk(1)
+        decoder_input = topi.squeeze().detach()  # detach from history as input
+
+        loss += criterion(decoder_output, target_tensor[di])
+        if decoder_input.item() == EOS_token:
+            break
+
+    loss.backward()
+
+    encoder_optimizer.step()
+    decoder_optimizer.step()
+
+    return loss.item() / target_length
+
+
+def trainItersRnn(training_pairs, encoder, decoder, print_every=100, plot_every=100, learning_rate=0.01):
+    start = time.time()
+    plot_losses = []
+    print_loss_total = 0  # Reset every print_every
+    plot_loss_total = 0  # Reset every plot_every
+
+    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+    criterion = nn.NLLLoss()
+
+    n_iters = len(training_pairs)
+    for iter in range(1, n_iters + 1):
+        #print 'Iter: %d/%d' % (iter+1, n_iters+1)
+        training_pair = training_pairs[iter - 1]
+        input_tensor = training_pair[0]
+        target_tensor = training_pair[1]
+
+        loss = trainRnn(input_tensor, target_tensor, encoder,
+                     decoder, encoder_optimizer, decoder_optimizer, criterion)
+        print_loss_total += loss
+        plot_loss_total += loss
+
+        if iter % print_every == 0:
+            print_loss_avg = print_loss_total / print_every
+            print_loss_total = 0
+            print('%s (%d %.1f%%) %.4f' % (timeSince(start, iter * 1.0 / n_iters),
+                                         iter, iter *100. / n_iters, print_loss_avg))
+
+        if iter % plot_every == 0:
+            plot_loss_avg = plot_loss_total / plot_every
+            plot_losses.append(plot_loss_avg)
+            plot_loss_total = 0
+
+    print_loss_avg = print_loss_total / (n_iters + 1.)
+    print('epoch avg loss =  %.4f' % (print_loss_avg))
+
+
+def evaluateRnn(sentence, encoder, decoder, input_lang, output_lang, max_length=MAX_LENGTH):
+    with torch.no_grad():
+        input_tensor = input_lang.tensorFromSentence(sentence)
+        input_length = input_tensor.size()[0]
+        encoder_hidden = encoder.initHidden(device=device)
+
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[ei],
+                                                     encoder_hidden)
+
+        decoder_input = torch.tensor([[SOS_token]], device=device)  # SOS
+
+        decoder_hidden = encoder_hidden
+
+        decoded_words = []
+
+        for di in range(max_length):
+            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+            topv, topi = decoder_output.data.topk(1)
+            if topi.item() == EOS_token:
+                decoded_words.append('EOS')
+                break
+            else:
+                decoded_words.append(output_lang.index2word[topi.item()])
+
+            decoder_input = topi.squeeze().detach()
+
+        return decoded_words
 
 if __name__=='__main__':
     pass
+
+
+
+
+
+

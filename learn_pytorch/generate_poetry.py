@@ -60,29 +60,45 @@ if __name__=='__main__':
         poets.append(poet)
         datas.append(vec)
 
-    print len(datas)
+    print >> sys.stderr, 'data_counts=%d' % len(datas)
+    print >> sys.stderr, 'word_counts=%d' % lang.n_words
 
-    epoch_count = 10
+    epoch_count = 2000
     hidden_size = 32
 
     encoder = gru.EncoderRNN(lang.n_words, hidden_size)
-    #decoder = gru.AttnDecoderRNN(lang.n_words, hidden_size)
+
     decoder = gru.AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1)
+    trainFunc = gru.trainIters
+    evaluationFunc = gru.evaluate
+
+    #decoder = gru.DecoderRNN(lang.n_words, hidden_size)
+    #trainFunc = gru.trainItersRnn
+    #evaluationFunc = gru.evaluateRnn
 
     if len(sys.argv)>1 and sys.argv[1] == '--load':
         encoder.load_state_dict(torch.load('encoder.pkl'))
         decoder.load_state_dict(torch.load('decoder.pkl'))
 
     else:
-        training_pairs = [] #[(poet[:-1], poet[1:]) for poet in datas]
+        training_pairs = [(poet[:-1], poet[1:]) for poet in datas]
+        '''
         for poet in datas:
             for end in range(1, len(poet)-1):
                 training_pairs.append( (poet[:end+1], poet[end+1:end+2]) )
+        '''
 
         print 'traning samples: %s' % (str(training_pairs[0][0]))
         for i in range(epoch_count):
             print >> sys.stderr, 'epoch: %d' % i
-            gru.trainIters(training_pairs, encoder, decoder)
+            trainFunc(training_pairs, encoder, decoder)
+
+            idx = random.randint(0, len(datas)-1)
+            input = poets[idx][:-1]
+            output = evaluationFunc(input, encoder, decoder, lang, lang)
+            print '>>> ' + u''.join(input).encode('utf-8')
+            print '>>> ' + ','.join(map(lambda x:'%d'%x, datas[idx][:-1]))
+            print '<<< ' + u''.join(output).encode('utf-8')
 
         print >> sys.stderr, 'train over.'
         torch.save(encoder.state_dict(), 'encoder.pkl')
@@ -90,7 +106,7 @@ if __name__=='__main__':
         print >> sys.stderr, 'save model.'
 
     input = poets[0][:-1]
-    output, output_hidden = gru.evaluate(input, encoder, decoder, lang, lang)
+    output = evaluationFunc(input, encoder, decoder, lang, lang)
     print '>>> ' + u''.join(input).encode('utf-8')
     print '>>> ' + ','.join(map(lambda x:'%d'%x, datas[0][:-1]))
     print '<<< ' + u''.join(output).encode('utf-8')
@@ -103,7 +119,7 @@ if __name__=='__main__':
 
     gen = ['SOS', first_char]
     for i in range(20):
-        output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
+        output = evaluationFunc(gen, encoder, decoder, lang, lang)
         print u''.join(output).encode('utf-8')
         gen.append(output[-1])
 
