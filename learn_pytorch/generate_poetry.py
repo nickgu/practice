@@ -20,8 +20,9 @@ import torch
 
 class PoetryRepo:
     def __init__(self, path='dataset/poetry'):
+        use_poem = False # use poem or sentence.
         self.__all_poetry = []
-        test_count = 100
+        test_count = 50
         output_file = file('poet.debug.txt', 'w')
         for filename in os.listdir(path):
             if filename.startswith('poet.'):
@@ -30,12 +31,19 @@ class PoetryRepo:
                     for item in d:
                         if 'paragraphs' in item:
                             poet = u''.join(item['paragraphs'])
-                            for s in poet.split(u'，'):
-                                for u in s.split(u'。'):
-                                    if len(u)>0:
-                                        #print u.encode('utf-8')
-                                        self.__all_poetry.append( u ) 
-                                        print >> output_file, u.encode('utf8')
+                            # whole poem.
+                            if use_poem:
+                                self.__all_poetry.append( poet ) 
+                                print >> output_file, poet.encode('utf8')
+                            else:
+                                # single sentence.
+                                for s in poet.split(u'，'):
+                                    for u in s.split(u'。'):
+                                        if len(u)>0:
+                                            #print u.encode('utf-8')
+                                            self.__all_poetry.append( u ) 
+                                            print >> output_file, u.encode('utf8')
+
                             if test_count > 0 and len(self.__all_poetry)>=test_count:
                                 break
                 if test_count > 0 and len(self.__all_poetry)>=test_count:
@@ -70,6 +78,10 @@ if __name__=='__main__':
     encoder = gru.EncoderRNN(lang.n_words, hidden_size)
     #decoder = gru.AttnDecoderRNN(lang.n_words, hidden_size)
     decoder = gru.AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1)
+
+    if False:
+        encoder.cuda()
+        decoder.cuda()
 
     argset = set()
     if len(sys.argv)>1:
@@ -117,10 +129,20 @@ if __name__=='__main__':
     input_line = sys.stdin.readline().decode('utf-8').strip()
     print >> sys.stderr, 'you input [%s] to generate.' % (input_line.encode('utf8'))
 
-    gen = list(input_line) + ['EOS']
-    output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
-    print >> sys.stderr, u''.join(output).encode('utf-8')
-    gen.append(output[-1])
+    gen = ['SOS'] + list(input_line)
+    while True:
+        output, output_hidden = gru.evaluate(gen, encoder, decoder, lang, lang)
+        print >> sys.stderr, 'output:' + u''.join(output).encode('utf-8')
+
+        a = output[len(gen)-2]
+        if a == 'EOS':
+            break
+        print >> sys.stderr, 'append: %s' % a.encode('utf-8')
+        gen.append(output[len(gen)-2])
+        print >> sys.stderr, '--------'
+        print >> sys.stderr, 'current: ' + u''.join(gen).encode('utf-8')
+        print >> sys.stderr, ''
+
 
 
 

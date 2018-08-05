@@ -17,13 +17,14 @@ from torch import optim
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device('cpu')
 
 SOS_token = 0
 EOS_token = 1
 teacher_forcing_ratio = 0.5
 
 class Lang:
-    def __init__(self, name, device=torch.device('cpu')):
+    def __init__(self, name, device=device):
         self.name = name
         self.word2index = {}
         self.word2count = {}
