@@ -17,7 +17,7 @@ class Conv2DPool(nn.Module):
         self.conv = nn.Conv2d(in_channel, out_channel, kernel_size, stride=stride, padding=padding)
         self.pool_kernel = pooling_kernel
 
-    def forword(self, input):
+    def forward(self, input):
         x = input
         x = self.conv(x)
         x = F.max_pool2d(x, self.pool_kernel)
@@ -49,18 +49,20 @@ class Cifar10Network(nn.Module):
         nn.Module.__init__(self)
         
         self.convs = []
-        self.conv.append( Conv2DPool(3, 64, [5,5], [5,5]) )
-        self.conv.append( Conv2DPool(64, 32, [3,3], [3,3]) )
-        self.conv.append( Conv2DPool(32, 16, [3,3], [3,3]) )
+        self.convs.append( Conv2DPool(3, 64, [5,5], [2,2], padding=2) )
+        self.convs.append( Conv2DPool(64, 32, [3,3], [2,2], padding=1) )
 
-        self.stack_fc = FCNetworkStack([256, 256, 128, 10])
-        self.softmax = F.softmax(10)
+        self.stack_fc = FCNetworkStack([512, 256, 128, 10])
+        self.softmax = F.softmax
 
     def forward(self, input):
         x = input
         for conv in self.convs:
             x = conv(x)
-        x = self.fc_model(x)
+
+        x = x.view( x.shape[0], -1 )
+        print x.shape
+        x = self.stack_fc(x)
         y = self.softmax(x)
         return y
 

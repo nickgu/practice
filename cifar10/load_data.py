@@ -10,8 +10,8 @@ import tensorflow as tf
 import random
 import threading
 
-cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
-#cifar10_dir='/Users/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
+#cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
+cifar10_dir='/Users/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
 
 
 file_list = map(lambda x:cifar10_dir+x, [
