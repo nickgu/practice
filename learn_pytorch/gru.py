@@ -8,6 +8,7 @@ from io import open
 import unicodedata
 import string
 import re
+import sys
 import random
 
 import torch
@@ -16,13 +17,14 @@ from torch import optim
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device('cpu')
 
 SOS_token = 0
 EOS_token = 1
 teacher_forcing_ratio = 0.5
 
 class Lang:
-    def __init__(self, name, device=torch.device('cpu')):
+    def __init__(self, name, device=device):
         self.name = name
         self.word2index = {}
         self.word2count = {}
@@ -40,7 +42,8 @@ class Lang:
 
     def addSentence(self, sentence):
         # sentence is generator
-        indice = [0]
+        indice = []
+        #indice = [0]
         for word in sentence:
             indice.append( self.addWord(word) )
         indice.append(1)
@@ -235,8 +238,8 @@ def trainIters(training_pairs, encoder, decoder, print_every=100, plot_every=100
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %.1f%%) %.4f' % (timeSince(start, iter * 1.0 / n_iters),
-                                         iter, iter *100. / n_iters, print_loss_avg))
+            print >> sys.stderr, '%s (%d %.1f%%) %.4f' % (timeSince(start, iter * 1.0 / n_iters), 
+                    iter, iter *100. / n_iters, print_loss_avg)
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
