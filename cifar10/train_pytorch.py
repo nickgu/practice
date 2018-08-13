@@ -40,7 +40,7 @@ class FCNetworkStack(nn.Module):
         for l in self.layers:
             input = l(input)
             input = self.active(input)
-            print input
+            #print input
         return input
 
 
@@ -51,6 +51,7 @@ class Cifar10Network(nn.Module):
         self.convs = []
         self.convs.append( Conv2DPool(3, 64, [5,5], [2,2], padding=2) )
         self.convs.append( Conv2DPool(64, 32, [3,3], [2,2], padding=1) )
+        self.convs.append( Conv2DPool(32, 32, [3,3], [2,2], padding=1) )
 
         self.stack_fc = FCNetworkStack([512, 256, 128, 10])
         self.softmax = F.softmax
@@ -61,7 +62,7 @@ class Cifar10Network(nn.Module):
             x = conv(x)
 
         x = x.view( x.shape[0], -1 )
-        print x.shape
+        #print x.shape
         x = self.stack_fc(x)
         y = self.softmax(x)
         return y
@@ -75,5 +76,21 @@ if __name__=='__main__':
     test_x, test_y = load_data.load_test()
 
     # make simple Model.
-     
+    
+    train_x = T.tensor(train_x).float() / 256.0
+    print train_x.shape
+    train_x = train_x.transpose(3,1)
+    print train_x.shape
+
+    test_x = T.tensor(train_x).float() / 256.0
+    print test_x.shape
+    test_x = test_x.transpose(3,1)
+    print test_x.shape
+
+    t = test_x[:50]
+    model = Cifar10Network()
+    print model(test_x)
+
+
+
 
