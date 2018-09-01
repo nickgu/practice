@@ -66,7 +66,7 @@ if __name__=='__main__':
     #   ml_binary_reader.py rating.csv output_data
     #
     if len(sys.argv)!=3:
-        print >> sys.stderr, 'ml_binary_reader.py rating.csv output_data'
+        print >> sys.stderr, 'ml_binary_reader.py rating.csv output_dir'
         sys.exit(-1)
 
     fd = file(sys.argv[1])
@@ -75,8 +75,14 @@ if __name__=='__main__':
     train, validation, test = reader.sample_train_validation_and_test()
     print >> sys.stderr, 'Genrate set over, begin dumpping.'
 
-    import cPickle as cp
-    cp.dump( (train, validation, test), file(sys.argv[2], 'wb') )
+    
+    def write(data, fd):
+        for uid, actions in data:
+            print >> fd, '%s\t%s' % (uid, ','.join(map(lambda x:'%s:%s:%s'%(x[0],x[1],x[2]), actions)))
+    
+    write(train, file(sys.argv[2] + '/train', 'w'))
+    write(validation, file(sys.argv[2] + '/valid', 'w'))
+    write(test, file(sys.argv[2] + '/test', 'w'))
 
 
 
