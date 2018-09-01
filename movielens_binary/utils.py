@@ -23,9 +23,8 @@ def readdata(dir, test_num=-1):
     return train, valid, test
 
 def measure(predictor, test):
-    total_hit = 0
-    total_output = 0
-    total_ans = 0
+    P = []
+    R = []
     for uid, items in test:
         items = filter(lambda x:x[1]==1, items)
 
@@ -35,12 +34,12 @@ def measure(predictor, test):
         ans = items[m:]
 
         hit = len(set(output).intersection( set(map(lambda x:x[0], ans)) ))
-        total_hit += hit
-        total_output += len(output)
-        total_ans += len(ans)
 
-    print 'P : %.2f%%' % (total_hit * 100.0 / total_output)
-    print 'R : %.2f%%' % (total_hit * 100.0 / total_ans)
+        P.append( hit * 1.0 / len(output) )
+        R.append( hit * 1.0 / len(ans) )
+
+    print 'P : %.2f%%' % (sum(P) * 100.0 / len(P))
+    print 'R : %.2f%%' % (sum(R) * 100.0 / len(R))
 
 if __name__=='__main__':
     train, valid, test = readdata(sys.argv[1])
