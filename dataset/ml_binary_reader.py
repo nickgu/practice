@@ -7,7 +7,7 @@ import sys
 import random
 import pydev
 
-class MovieLensRatingsReader:
+class MovieLensRatingsBinaryReader:
     def __init__(self, stream):
         self.__users = {}
 
