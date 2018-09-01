@@ -63,6 +63,21 @@ class MovieLensRatingsBinaryReader:
 if __name__=='__main__':
     # generate datasets from rating.csv
     #   
-    #   movielens_binary_reader.py rating.csv
+    #   ml_binary_reader.py rating.csv output_data
     #
-    pass
+    if len(sys.argv)!=3:
+        print >> sys.stderr, 'ml_binary_reader.py rating.csv output_data'
+        sys.exit(-1)
+
+    fd = file(sys.argv[1])
+    reader = MovieLensRatingsBinaryReader(fd)
+    print >> sys.stderr, 'Load over'
+    train, validation, test = reader.sample_train_validation_and_test()
+    print >> sys.stderr, 'Genrate set over, begin dumpping.'
+
+    import cPickle as cp
+    cp.dump( (train, validation, test), file(sys.argv[2], 'wb') )
+
+
+
+
