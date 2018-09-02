@@ -22,22 +22,36 @@ def readdata(dir, test_num=-1):
     test = readfile(file(dir + '/test'))
     return train, valid, test
 
-def measure(predictor, test):
+def measure(predictor, test, debug=False):
     P = []
     R = []
+    total_answers = 0
     for uid, items in test:
         items = filter(lambda x:x[1]==1, items)
 
         m = len(items) / 2
         input = items[:m]
-        output = predictor(uid, input)
         ans = items[m:]
+
+        output = predictor(uid, input)
+        total_answers += len(output)
+        if debug:
+            print '--- User [%s] ---' % uid
+            print 'input: [%s]' % (','.join(map(lambda x:'%s:%s'%(x[0], x[1]), input)))
+            print 'expect: [%s]' % (','.join(map(lambda x:'%s:%s'%(x[0], x[1]), ans)))
+            print 'output: [%s]' % (','.join(output))
+
+        if len(ans) == 0:
+            continue
+        if len(output) == 0:
+            continue
 
         hit = len(set(output).intersection( set(map(lambda x:x[0], ans)) ))
 
         P.append( hit * 1.0 / len(output) )
         R.append( hit * 1.0 / len(ans) )
 
+    print 'answers per user: %.2f' % (total_answers * 1.0 / len(test)) 
     print 'P : %.2f%%' % (sum(P) * 100.0 / len(P))
     print 'R : %.2f%%' % (sum(R) * 100.0 / len(R))
 
