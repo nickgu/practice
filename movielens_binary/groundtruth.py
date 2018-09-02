@@ -76,7 +76,7 @@ def algor_cooc(train, valid, test, topN, only1=False):
 
 if __name__=='__main__':
     TopN = 20
-    TestNum = 100
+    TestNum = -1
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)

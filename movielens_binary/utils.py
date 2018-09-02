@@ -27,11 +27,9 @@ def measure(predictor, test, debug=False):
     R = []
     total_answers = 0
     for uid, items in test:
-        items = filter(lambda x:x[1]==1, items)
-
         m = len(items) / 2
         input = items[:m]
-        ans = items[m:]
+        ans = filter(lambda x:x[1]==1, items[m:])
 
         if debug:
             print '--- User [%s] ---' % uid
