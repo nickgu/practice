@@ -16,12 +16,21 @@ def algor_hot(train, valid, test, topN):
 
             stat[iid][score] += 1
 
-    top = sorted(stat.iteritems(), key=lambda x:-x[1][1])[:topN]
+    top = sorted(stat.iteritems(), key=lambda x:-x[1][1])
     print 'stat over'
-    print top
+    #print top
 
     def predict(uid, items):
-        return map(lambda x:x[0], top)
+        readset = set(map(lambda x:x[0], items))
+
+        ans = []
+        for item in map(lambda x:x[0], top):
+            if item in readset:
+                continue
+            ans.append(item)
+            if len(ans) == topN:
+                break
+        return ans[:topN]
 
     utils.measure(predict, test)
 
@@ -37,14 +46,29 @@ def algor_cooc(train, valid, test, topN, only1=False):
 
     def predict(uid, items):
         local_stat = {}
+        readset = set(map(lambda x:x[0], items))
+
         for item, score, _ in items:
             if only1 and score!=1:
                 continue
             cooc_items = cooc_dict.get(item, [])
             for c_item, c_count in cooc_items:
+                if c_item in readset:
+                    continue
                 local_stat[c_item] = local_stat.get(c_item, 0) + c_count
 
         ans = map(lambda x:x[0], sorted(local_stat.iteritems(), key=lambda x:-x[1])[:topN])
+ 
+        '''
+        print 'items:'
+        print items
+        print 'local:'
+        print sorted(local_stat.iteritems(), key=lambda x:-x[1])[:20]
+        print 'ans:'
+        print ans
+        sys.stdin.read()
+        '''
+
         return ans
 
     utils.measure(predict, test, debug=False)
@@ -52,7 +76,7 @@ def algor_cooc(train, valid, test, topN, only1=False):
 
 if __name__=='__main__':
     TopN = 20
-    TestNum = -1
+    TestNum = 100
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)

@@ -33,12 +33,15 @@ def measure(predictor, test, debug=False):
         input = items[:m]
         ans = items[m:]
 
-        output = predictor(uid, input)
-        total_answers += len(output)
         if debug:
             print '--- User [%s] ---' % uid
             print 'input: [%s]' % (','.join(map(lambda x:'%s:%s'%(x[0], x[1]), input)))
             print 'expect: [%s]' % (','.join(map(lambda x:'%s:%s'%(x[0], x[1]), ans)))
+
+        output = predictor(uid, input)
+        total_answers += len(output)
+
+        if debug:
             print 'output: [%s]' % (','.join(output))
 
         if len(ans) == 0:
