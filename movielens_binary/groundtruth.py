@@ -25,7 +25,7 @@ def algor_hot(train, valid, test, topN):
 
     utils.measure(predict, test)
 
-def algor_cooc(train, valid, test, topN):
+def algor_cooc(train, valid, test, topN, only1=False):
     # using dict built by build_cooc.py
     fd = file('temp/cooc.txt') 
 
@@ -38,6 +38,8 @@ def algor_cooc(train, valid, test, topN):
     def predict(uid, items):
         local_stat = {}
         for item, score, _ in items:
+            if only1 and score!=1:
+                continue
             cooc_items = cooc_dict.get(item, [])
             for c_item, c_count in cooc_items:
                 local_stat[c_item] = local_stat.get(c_item, 0) + c_count
@@ -49,15 +51,19 @@ def algor_cooc(train, valid, test, topN):
         
 
 if __name__=='__main__':
-    TopN = 10
+    TopN = 20
     TestNum = -1
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)
     print >> sys.stderr, 'load over'
 
+    print >> sys.stderr, 'Algor: Hot'
     algor_hot(train, valid, test, TopN)
+    print >> sys.stderr, 'Algor: Cooc'
     algor_cooc(train, valid, test, TopN)
+    print >> sys.stderr, 'Algor: CoocOnly_1'
+    algor_cooc(train, valid, test, TopN, only1=True)
 
 
         
