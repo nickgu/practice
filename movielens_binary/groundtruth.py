@@ -66,7 +66,6 @@ def algor_cooc(train, valid, test, topN, only1=False):
         print sorted(local_stat.iteritems(), key=lambda x:-x[1])[:20]
         print 'ans:'
         print ans
-        sys.stdin.read()
         '''
 
         return ans
@@ -74,20 +73,67 @@ def algor_cooc(train, valid, test, topN, only1=False):
     utils.measure(predict, test, debug=False)
         
 
+def algor_item2vec(train, valid, test, topN):
+    import item2vec
+    index = item2vec.ItemIndex('temp/word2vec.output.txt')
+    
+    def predict(uid, items):
+        readset = set(map(lambda x:x[0], items))
+
+        stat_dict = {}
+        search_error = 0
+        for idx, score, ts in items:
+            if score != 1:
+                continue
+            idx = int(idx)
+            try:
+                ans, dis = index.index.get_nns_by_item(idx, n=300, include_distances=True)
+                print idx, ans
+                print dis
+ 
+                for item, score in zip(ans, dis):
+                    if item == idx:
+                        continue
+                    stat_dict[item] = stat_dict.get(item, 0) + score
+
+            except:
+                search_error += 1
+                continue
+               
+        ans = sorted(stat_dict.iteritems(), key=lambda x:-x[1])
+        ret = []
+        for item, score in ans:
+            if item in readset:
+                continue
+            ret.append(str(item))
+            if len(ret)>=topN:
+                return ret
+        return ret
+
+    utils.measure(predict, test, debug=True)
+
+
 if __name__=='__main__':
     TopN = 20
-    TestNum = -1
+    TestNum = 100
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)
     print >> sys.stderr, 'load over'
 
+    '''
     print >> sys.stderr, 'Algor: Hot'
     algor_hot(train, valid, test, TopN)
+
     print >> sys.stderr, 'Algor: Cooc'
     algor_cooc(train, valid, test, TopN)
+
     print >> sys.stderr, 'Algor: CoocOnly_1'
     algor_cooc(train, valid, test, TopN, only1=True)
+    '''
+
+    print >> sys.stderr, 'Algor: Item2Vec'
+    algor_item2vec(train, valid, test, TopN)
 
 
         

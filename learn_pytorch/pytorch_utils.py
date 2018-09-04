@@ -6,7 +6,7 @@
 
 def common_train(train_data, model, epoch):
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.02)
+    optimizer = optim.SGD(model.parameters(), lr=0.02)
 
     dtype = torch.FloatTensor
     loader = torch.utils.data.DataLoader(zip(X, Y), shuffle=True, batch_size=150)
@@ -37,7 +37,7 @@ def common_train(train_data, model, epoch):
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs = net(inputs)
+                outputs = model.forward(inputs)
 
                 # temp test precision
                 # seems different max need keepdim..

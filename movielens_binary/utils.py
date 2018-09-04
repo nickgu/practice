@@ -26,7 +26,10 @@ def measure(predictor, test, debug=False):
     P = []
     R = []
     total_answers = 0
-    for uid, items in test:
+    generator = test
+    if debug:
+        generator = test[:1]
+    for uid, items in generator:
         m = len(items) / 2
         input = items[:m]
         ans = filter(lambda x:x[1]==1, items[m:])
