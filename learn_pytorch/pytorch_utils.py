@@ -3,84 +3,63 @@
 # author: nickgu 
 # 
 
+import torch
 
-def common_train(train_data, model, epoch):
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.02)
+class Trainset:
+    def __init__(self):
+        self.iter = 0
+        self.epoch = 0
 
-    dtype = torch.FloatTensor
-    loader = torch.utils.data.DataLoader(zip(X, Y), shuffle=True, batch_size=150)
+    def next_iter(self):
+        # genenrate data in variables
+        self.iter += 1
+ 
+class CommonTrainer:
+    def __init__(self,
+                 iteration=10,
+                 initial_lr=0.01):
+        """Initilize class parameters.
 
-    epoch_num = 0
-    best_hit = 0
-    best_ps = ''
-    while 1:
-        print >> sys.stderr, 'input n epoch to run..'
-        l=sys.stdin.readline()
-        try:
-            n = int(l)
-        except:
-            break
+        Args:
+            iteration: Control the multiple training iterations.
+            initial_lr: Initial learning rate.
 
-        for i in range(n):
-            epoch_num += 1
-            
-            data_iter = iter(loader)
-            run_loss = 0
-            right = 0
-            total = 0
-            for t, (x, y) in enumerate(data_iter):
-                inputs = Variable(x).type(dtype)
-                labels = Variable(y).type(torch.LongTensor)
+        Returns:
+            None.
+        """
+        self.iteration = iteration
+        self.initial_lr = initial_lr
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
+        '''
+        self.optimizer = optim.SGD(
+            self.skip_gram_model.parameters(), lr=self.initial_lr)
+        '''
+        self.optimizer = optim.SparseAdam(
+            self.skip_gram_model.parameters(), lr=self.initial_lr)
 
-                # forward + backward + optimize
-                outputs = model.forward(inputs)
 
-                # temp test precision
-                # seems different max need keepdim..
-                #pred = outputs.max(1, keepdim=True)[1]
-                pred = outputs.max(1)[1]
+    def train(self, model, data):
+        """Multiple training.
+        Returns:
+            None.
+        """
+        pair_count = data.evaluate_pair_count(self.window_size)
+        process_bar = tqdm(range(int(batch_count)))
 
-                p = pred.eq(labels.view_as(pred)).sum()
-                right += p.data[0]
-                total += len(pred)
-                precision = right * 100.0 / total
+        acc_loss = 0.0
+        for i in process_bar:
+            x1, x2 = data.next_iter()
 
-                loss = criterion(outputs, labels)
-                run_loss += loss.data[0]
-                loss.backward()
-                optimizer.step()
+            self.optimizer.zero_grad()
+            loss = self.model.forward(x1, x2)
+            loss.backward()
+            self.optimizer.step()
 
-            # print statistics
-            ops = 'p=%.2f%% (%d/%d)' % (precision, right, total)
-            ps = ops
-            if right >= 145:
-                ps = pydev.ColorString.green(ops)
-            if right >= 147:
-                ps = pydev.ColorString.cyan(ops)
-            if right >= 148:
-                ps = pydev.ColorString.red(ops)
-            if right >= 149:
-                ps = pydev.ColorString.yellow(ops)
-
-            if right > best_hit:
-                best_hit = right
-                best_ps = ps
-   
-            print('[%d, %d] loss: %.5f %s curbest=%s' %
-              (epoch_num, n, run_loss, ps, best_ps))
-            if best_hit == 150:
-                # we found the best answers!.
-                break
-
-        if best_hit == 150:
-            # we found the best answers!.
-            break
-
-   
+            cur_loss = loss.data[0] / len(pos_pairs)
+            acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
+            process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
+                                        (cur_loss, acc_loss,
+                                         self.optimizer.param_groups[0]['lr']))
 
 if __name__=='__main__':
     pass
