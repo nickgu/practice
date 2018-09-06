@@ -8,13 +8,13 @@ import annoy
 import pydev
 
 class ItemIndex:
-    def __init__(self, filename):
-        self.index = annoy.AnnoyIndex(f=100, metric='dot')
+    def __init__(self, filename, embedding_size=100):
+        self.index = annoy.AnnoyIndex(f=embedding_size, metric='dot')
 
         fd = file(filename)
         for line in fd.readlines():
             row = line.strip().split(' ')
-            if len(row)!=101:
+            if len(row)!=embedding_size+1:
                 continue
             key = row[0]
             if key == '':

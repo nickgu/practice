@@ -75,7 +75,7 @@ def algor_cooc(train, valid, test, topN, only1=False):
 
 def algor_item2vec(train, valid, test, topN):
     import item2vec
-    index = item2vec.ItemIndex('temp/word2vec.output.txt')
+    index = item2vec.ItemIndex('temp/word2vec.output.txt', 500)
     
     def predict(uid, items):
         readset = set(map(lambda x:x[0], items))
@@ -88,8 +88,8 @@ def algor_item2vec(train, valid, test, topN):
             idx = int(idx)
             try:
                 ans, dis = index.index.get_nns_by_item(idx, n=300, include_distances=True)
-                print idx, ans
-                print dis
+                #print idx, ans
+                #print dis
  
                 for item, score in zip(ans, dis):
                     if item == idx:
@@ -110,18 +110,17 @@ def algor_item2vec(train, valid, test, topN):
                 return ret
         return ret
 
-    utils.measure(predict, test, debug=True)
+    utils.measure(predict, test, debug=False)
 
 
 if __name__=='__main__':
-    TopN = 20
+    TopN = 10
     TestNum = 100
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)
     print >> sys.stderr, 'load over'
 
-    '''
     print >> sys.stderr, 'Algor: Hot'
     algor_hot(train, valid, test, TopN)
 
@@ -130,10 +129,11 @@ if __name__=='__main__':
 
     print >> sys.stderr, 'Algor: CoocOnly_1'
     algor_cooc(train, valid, test, TopN, only1=True)
-    '''
 
+    '''
     print >> sys.stderr, 'Algor: Item2Vec'
     algor_item2vec(train, valid, test, TopN)
+    '''
 
 
         
