@@ -76,7 +76,7 @@ if __name__=='__main__':
         y_ = model.forward(x)
         loss = loss_fn(x, y_)
         loss.backward()
-        return loss[0]
+        return loss[0] / data.movie_count
 
     easy_train.easy_train(fwbp, data, optimizer, iteration_count=1000)
 
