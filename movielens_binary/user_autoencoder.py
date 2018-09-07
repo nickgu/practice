@@ -61,8 +61,15 @@ class DataLoader(easy_train.CommonDataLoader):
         
 
 if __name__=='__main__':
+    if len(sys.argv)!=3:
+        print >> sys.stderr, 'Usage:\nuser_autoencoder.py <datadir> <model>'
+        sys.exit(-1)
+
+    data_dir = sys.argv[1]
+    model_save_path = sys.argv[2]
+
     EmbeddingSize = 128
-    train, valid, test = utils.readdata(sys.argv[1], test_num=1000)
+    train, valid, test = utils.readdata(data_dir, test_num=1000)
 
     data = DataLoader(train)
     data.set_batch_size(100)
@@ -79,4 +86,7 @@ if __name__=='__main__':
         return loss[0] / data.movie_count
 
     easy_train.easy_train(fwbp, data, optimizer, iteration_count=1000)
+
+    torch.save(model.state_dict(), model_save_path)
+
 
