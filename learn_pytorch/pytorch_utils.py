@@ -3,84 +3,78 @@
 # author: nickgu 
 # 
 
+import torch
+import torch.nn as nn
 
-def common_train(train_data, model, epoch):
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.02)
+class CommonDataLoader:
+    def __init__(self):
+        self.batch_size = 100
 
-    dtype = torch.FloatTensor
-    loader = torch.utils.data.DataLoader(zip(X, Y), shuffle=True, batch_size=150)
+    def set_batch_size(self, batch_size):
+        self.batch_size = batch_size
 
-    epoch_num = 0
-    best_hit = 0
-    best_ps = ''
-    while 1:
-        print >> sys.stderr, 'input n epoch to run..'
-        l=sys.stdin.readline()
-        try:
-            n = int(l)
-        except:
-            break
+    def batch_per_epoch(self):
+        pass
 
-        for i in range(n):
-            epoch_num += 1
-            
-            data_iter = iter(loader)
-            run_loss = 0
-            right = 0
-            total = 0
-            for t, (x, y) in enumerate(data_iter):
-                inputs = Variable(x).type(dtype)
-                labels = Variable(y).type(torch.LongTensor)
+    def next_iter(self):
+        # genenrate data in variables
+        pass
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
 
-                # forward + backward + optimize
-                outputs = model.forward(inputs)
+def common_train(model, data, optimizer, batch_size, iteration_count=-1, epoch_count=-1):
+    data.set_batch_size(batch_size)
 
-                # temp test precision
-                # seems different max need keepdim..
-                #pred = outputs.max(1, keepdim=True)[1]
-                pred = outputs.max(1)[1]
+    if iteration > 0:
+        process_bar = tqdm(range(int(iteration)))
+    else:
+        batch_per_epoch = data.batch_per_epoch()
+        batch_count = epoch_count * batch_per_epoch / batch_size
+        process_bar = tqdm(range(int(batch_count)))
 
-                p = pred.eq(labels.view_as(pred)).sum()
-                right += p.data[0]
-                total += len(pred)
-                precision = right * 100.0 / total
+    acc_loss = 0.0
+    for i in process_bar:
+        x = data.next_iter()
 
-                loss = criterion(outputs, labels)
-                run_loss += loss.data[0]
-                loss.backward()
-                optimizer.step()
+        optimizer.zero_grad()
+        loss = model.forward(x)
+        loss.backward()
+        optimizer.step()
 
-            # print statistics
-            ops = 'p=%.2f%% (%d/%d)' % (precision, right, total)
-            ps = ops
-            if right >= 145:
-                ps = pydev.ColorString.green(ops)
-            if right >= 147:
-                ps = pydev.ColorString.cyan(ops)
-            if right >= 148:
-                ps = pydev.ColorString.red(ops)
-            if right >= 149:
-                ps = pydev.ColorString.yellow(ops)
-
-            if right > best_hit:
-                best_hit = right
-                best_ps = ps
-   
-            print('[%d, %d] loss: %.5f %s curbest=%s' %
-              (epoch_num, n, run_loss, ps, best_ps))
-            if best_hit == 150:
-                # we found the best answers!.
-                break
-
-        if best_hit == 150:
-            # we found the best answers!.
-            break
-
-   
+        cur_loss = loss.data[0] / len(batch_size)
+        acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
+        process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
+                                    (cur_loss, acc_loss,
+                                     optimizer.param_groups[0]['lr']))
 
 if __name__=='__main__':
-    pass
+    # test code.
+    class LRModel(nn.Model):
+        def __init__(self, in_size):
+            nn.Model.__init__(self)
+            self.fc = nn.Linear(in_size, 1)
+            self.loss = nn.CrossEntropyLoss
+
+        def forward(self, x, y):
+            y_ = F.relu(self.fc(x))
+            self.loss(y, y_)
+
+    class TrainData(CommonDataLoader):
+        def __init__(self, x_size):
+            self.x_size = x_size
+            self.batch_size = 10
+            self.batch_per_epoch = 1000
+
+        def next_iter(self):
+            pass
+
+    import torch.optim as optim
+
+    data = TrainData(5)
+    model = LRModel(5)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    common_train(model, data, optimizer, batch_size=32, iteration=100)
+
+
+
+
+
