@@ -21,9 +21,9 @@ class UserAutoEncoder(nn.Module):
         nn.Module.__init__(self)
 
         self.fc1 = nn.Linear(input_size, 512)
-        self.fc2 = nn.Linear(512, EmbeddingSize)
+        self.fc2 = nn.Linear(512, embedding_size)
 
-        self.fc3 = nn.Linear(EmbeddingSize, 512)
+        self.fc3 = nn.Linear(embedding_size, 512)
         self.fc4 = nn.Linear(512, input_size)
 
     def forward(self, x):
@@ -32,6 +32,11 @@ class UserAutoEncoder(nn.Module):
         x_ = F.relu( self.fc3(x_) )
         y = torch.sigmoid( self.fc4(x_) )
         return y
+
+    def calc_emb(self, x):
+        x_ = F.relu( self.fc1(x) )
+        emb = F.relu( self.fc2(x_) )
+        return emb
 
 class DataLoader(easy_train.CommonDataLoader):
     def __init__(self, train):
