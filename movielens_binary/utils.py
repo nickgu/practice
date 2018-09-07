@@ -17,9 +17,11 @@ def readfile(fd, test_num=-1):
     return data
 
 def readdata(dir, test_num=-1):
+    print >> sys.stderr, 'load [%s/]' % dir
     train = readfile(file(dir + '/train'), test_num)
     valid = readfile(file(dir + '/valid'))
     test = readfile(file(dir + '/test'))
+    print >> sys.stderr, 'load over'
     return train, valid, test
 
 def measure(predictor, test, debug=False):

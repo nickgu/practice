@@ -22,7 +22,7 @@ class CommonDataLoader:
         pass
 
 
-def easy_train(model, loss_fn, data, optimizer, iteration_count=-1, epoch_count=-1):
+def easy_train(forward_and_backward_fn, data, optimizer, iteration_count=-1, epoch_count=-1):
     if iteration_count > 0:
         process_bar = tqdm.tqdm(range(int(iteration_count)))
     else:
@@ -32,16 +32,10 @@ def easy_train(model, loss_fn, data, optimizer, iteration_count=-1, epoch_count=
 
     acc_loss = 1.0
     for i in process_bar:
-        x, y = data.next_iter()
-
         optimizer.zero_grad()
-        y_ = model.forward(x)
-
-        loss = loss_fn(y_, y)
-        loss.backward()
+        cur_loss = forward_and_backward_fn()
         optimizer.step()
 
-        cur_loss = loss.data[0] / data.batch_size
         acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
         process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
                                     (cur_loss, acc_loss,
@@ -78,6 +72,7 @@ if __name__=='__main__':
             Y = Variable(torch.tensor(y).long())
             return X, Y
 
+
     import torch.optim as optim
 
     data = TrainData()
@@ -87,12 +82,19 @@ if __name__=='__main__':
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     loss = nn.CrossEntropyLoss()
 
+    def fwbp():
+        x, y = data.next_iter()
+        y_ = model.forward(x)
+        loss = loss_fn(y_, y)
+        loss.backward()
+        return loss[0] / data.batch_size
+
     # test.
     x, y = data.next_iter()
     y_ = model.forward(x).max(1)[1]
     print y.eq(y_).sum()
 
-    easy_train(model, loss, data, optimizer, iteration_count=1000)
+    easy_train(fwbp, data, optimizer, iteration_count=1000)
 
     # test.
     x, y = data.next_iter()
