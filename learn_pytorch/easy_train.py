@@ -38,8 +38,26 @@ def easy_train(forward_and_backward_fn, data, optimizer, iteration_count=-1, epo
 
         acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
         process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
-                                    (cur_loss, acc_loss,
-                                     optimizer.param_groups[0]['lr']))
+                                    (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
+
+
+def easy_test(model, x, y):
+    # easy test for softmax-network.
+    # the net may design like this:
+    #
+    #   x_ = ...
+    #   x_ = ...
+    #   y_ = softmax(self.fc(x_))
+    #   loss = torch.nn.CrossEntropy(y_, y)
+    #
+    #   max(1) : max dim at dim-1
+    #   [1] : get dim.
+    y_ = model.forward(x).max(1)[1]
+    #   check the precision
+    hit = y.eq(y_).sum()
+    total = len(y)
+    import sys
+    print >> sys.stderr, ' >>> easy_test_result: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total)
 
 if __name__=='__main__':
     # test code.
@@ -80,7 +98,7 @@ if __name__=='__main__':
 
     model = LR(2)
     optimizer = optim.SGD(model.parameters(), lr=0.01)
-    loss = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss()
 
     def fwbp():
         x, y = data.next_iter()
@@ -91,15 +109,13 @@ if __name__=='__main__':
 
     # test.
     x, y = data.next_iter()
-    y_ = model.forward(x).max(1)[1]
-    print y.eq(y_).sum()
+    easy_test(model, x, y)
 
     easy_train(fwbp, data, optimizer, iteration_count=1000)
 
     # test.
     x, y = data.next_iter()
-    y_ = model.forward(x).max(1)[1]
-    print y.eq(y_).sum()
+    easy_test(model, x, y)
 
 
 
