@@ -36,20 +36,19 @@ class SoftmaxNet(nn.Module):
 
 if __name__=='__main__':
     iris_data = dataset.IrisData(label_onehot_encoding=False)
-    x, y = iris_data.data()
-    x = x / y.max()
-    print x.shape
-    print y.shape
+    X, Y = iris_data.data()
+    X = X / Y.max()
+    print X.shape
+    print Y.shape
 
 
-    x = Variable(torch.tensor(x)).float()
-    y = Variable(torch.tensor(y)).long()
+    x = Variable(torch.tensor(X)).float()
+    y = Variable(torch.tensor(Y)).long()
 
     net = SoftmaxNet()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.005)
     #optimizer = optim.Adam(net.parameters(), lr=0.1)
-
 
     def feed_data():
         y_ = net.forward(x)
@@ -57,9 +56,22 @@ if __name__=='__main__':
         loss.backward()
         return loss[0] 
 
+    def single_feed_data():
+        import random
+        idx = random.randint(0, len(X)-1)
+        
+        x = Variable(torch.tensor([X[idx]])).float()
+        y = Variable(torch.tensor([Y[idx]])).long()
+
+        y_ = net.forward(x)
+        loss = criterion(y_, y)
+        loss.backward()
+        return loss[0] 
+
+
     easy_train.easy_test(net, x, y)
 
-    easy_train.easy_train(feed_data, None, optimizer, iteration_count=10000)
+    easy_train.easy_train(single_feed_data, None, optimizer, iteration_count=10000)
 
     easy_train.easy_test(net, x, y)
 
