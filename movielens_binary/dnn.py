@@ -16,6 +16,8 @@ import utils
 sys.path.append('../learn_pytorch')
 import easy_train
 
+import numpy as np
+
 class FC_DNN(nn.Module):
     def __init__(self, movie_count, embedding_size):
         nn.Module.__init__(self)
@@ -101,25 +103,45 @@ if __name__=='__main__':
 
     data = DataLoader(train)
     model = FC_DNN(data.movie_count, EmbeddingSize)
-    optimizer = optim.SGD(model.parameters(), lr=0.001)
+    optimizer = optim.SGD(model.parameters(), lr=0.005)
     #optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
 
-    def fwbp():
-        x, y, clicks = generator.next()
+    test_y = []
+    test_y_ = []
 
-        #print x, y, clicks
-        clicks_ = model.forward(x, y)
-        #print clicks_, clicks
-        loss = loss_fn(clicks_, clicks)
-        loss.backward()
+    class Trainer: 
+        def __init__(self):
+            self.test_y = []
+            self.test_y_ = []
 
-        #print clicks, clicks_, loss[0]
-        return loss[0]
+        def fwbp(self):
+            x, y, clicks = generator.next()
 
-    easy_train.easy_train(fwbp, optimizer, 200000)
+            #print x, y, clicks
+            clicks_ = model.forward(x, y)
+        
+            # temp test auc for testing.
+            for idx in range(len(clicks)):
+                self.test_y.append( clicks[idx].long().item() )
+                self.test_y_.append( clicks_[idx].item() )
+            if len(self.test_y)>=1000:
+                easy_train.easy_auc(self.test_y_, self.test_y)
+                self.test_y = []
+                self.test_y_ = []
+
+            #print clicks_, clicks
+            loss = loss_fn(clicks_, clicks)
+            loss.backward()
+
+            #print clicks, clicks_, loss[0]
+            return loss[0]
+
+    trainer = Trainer()
+
+    easy_train.easy_train(trainer.fwbp, optimizer, 200000)
 
     torch.save(model.state_dict(), model_save_path)
 
