@@ -31,7 +31,7 @@ class SoftmaxNet(nn.Module):
     def forward(self, x):
         x = F.relu( self.fc1(x) )
         x = F.relu( self.fch(x) )
-        x = F.softmax( self.fc2(x) )
+        x = self.fc2(x)
         return x
 
 if __name__=='__main__':
@@ -71,7 +71,7 @@ if __name__=='__main__':
 
     easy_train.easy_test(net, x, y)
 
-    easy_train.easy_train(single_feed_data, None, optimizer, iteration_count=10000)
+    easy_train.easy_train(single_feed_data, optimizer, 10000)
 
     easy_train.easy_test(net, x, y)
 

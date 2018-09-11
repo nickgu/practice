@@ -30,7 +30,7 @@ class SoftmaxNet(nn.Module):
         x0 = F.relu( self.fc1(x) )
         x = F.relu( self.fc2(x0) )
         x = F.relu( self.fc3(x) )
-        x = F.softmax( self.fc4(x + x0) )
+        x = self.fc4(x + x0)
         return x
 
 if __name__=='__main__':
