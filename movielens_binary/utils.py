@@ -4,6 +4,7 @@
 # 
 
 import sys
+import tqdm
 
 def readfile(fd, test_num=-1):
     data = []

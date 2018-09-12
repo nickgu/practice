@@ -50,7 +50,7 @@ class DataLoader:
         self.y = []
         max_movie_id = 0
 
-        self.batch_size = 100
+        self.batch_size = 200
         self.epoch = 0
         self.__offset = 0
 
