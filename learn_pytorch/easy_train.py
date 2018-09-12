@@ -4,6 +4,7 @@
 # 
 
 import sys
+import pydev
 
 import torch
 import torch.nn as nn
@@ -13,7 +14,7 @@ def easy_auc(pred, y, reorder=True):
     import sklearn.metrics as M
     tpr, fpr, threshold = M.roc_curve(y, pred, reorder)
     auc = M.auc(tpr, fpr)
-    print >> sys.stderr, ' >>> EASY_AUC_TEST: %.4f (%d items) <<<' % (auc, len(pred))
+    print >> sys.stderr, pydev.ColorString.yellow(' >>> EASY_AUC_TEST: %.4f (%d items) <<<' % (auc, len(pred)))
     return auc
 
 def easy_train(forward_and_backward_fn, optimizer, iteration_count):
@@ -43,7 +44,7 @@ def easy_test(model, x, y):
     #   check the precision
     hit = y.eq(y_).sum()
     total = len(y)
-    print >> sys.stderr, ' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total)
+    print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
 
 if __name__=='__main__':
     # test code.

@@ -22,7 +22,7 @@ class FC_DNN(nn.Module):
     def __init__(self, movie_count, embedding_size):
         nn.Module.__init__(self)
         
-        self.input_emb = nn.Embedding(movie_count, embedding_size)
+        self.input_embbag = nn.EmbeddingBag(movie_count, embedding_size, mode='mean')
         self.nid_emb = nn.Embedding(movie_count, embedding_size)
 
         self.fc1 = nn.Linear(embedding_size*2, 256)
@@ -30,10 +30,10 @@ class FC_DNN(nn.Module):
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 1)
 
-    def forward(self, input_nids, click_item):
+    def forward(self, input_nids, input_offset, click_item):
 
         # sum up embeddings.
-        input_embs = self.input_emb(input_nids).sum(1)
+        input_embs = self.input_embbag(input_nids, input_offset)
         y_emb = self.nid_emb(click_item)
 
         x_ = torch.cat((input_embs, y_emb), 1)
@@ -50,6 +50,10 @@ class DataLoader:
         self.y = []
         max_movie_id = 0
 
+        self.batch_size = 100
+        self.epoch = 0
+        self.__offset = 0
+
         for uid, views in train:
             clicks = map(lambda x:int(x[0]), filter(lambda x:x[1]==1, views))
             if len(clicks)==0:
@@ -65,30 +69,56 @@ class DataLoader:
                 self.x.append(x)
                 self.y.append(y)
 
+        '''
+        test_num = 10000
+        self.x = self.x[:test_num]
+        self.y = self.y[:test_num]
+
+        print self.x
+        print self.y
+        '''
+
         self.movie_count = max_movie_id + 1
         pydev.log('max_movie_id=%d' % self.movie_count)
         pydev.log('data_count=%d' % len(self.x))
         
     def data_generator(self):
-        epoch = 0
-        while 1:
-            epoch += 1
-            print >> sys.stderr, 'Epoch %d' % epoch
-            for idx in range(len(self.x)):
-                x = []
-                y = []
-                clicks = []
-                sample_size = 3
-                for i in range(sample_size):
-                    x.append( self.x[idx] )
-                    if i == 0:
-                        y.append( self.y[idx] )
-                        clicks.append( 1. )
-                    else:
-                        y.append( random.choice(range(self.movie_count)) )
-                        clicks.append( 0. )
+        while True:
+            if self.__offset + self.batch_size > len(self.x):
+                self.epoch += 1
+                print >> sys.stderr, 'Epoch %d' % self.epoch
 
-                yield torch.tensor(x), torch.tensor(y), torch.tensor(clicks)
+            input_nids = []
+            input_offset = []
+            y = []
+            clicks = []
+            
+            for i in range(self.batch_size):
+                idx = (self.__offset + i) % len(self.x)
+
+                input_offset.append(len(input_nids))
+                input_nids += self.x[idx]
+                y.append( self.y[idx] )
+                clicks.append( 1. )
+
+                # negative sample.
+                idx = random.randint(0, len(self.x)-1)
+                input_offset.append(len(input_nids))
+                input_nids += self.x[idx]
+                y.append( random.randint(0, self.movie_count-1) )
+                clicks.append( 0. )
+
+            '''
+            print input_nids
+            print input_offset
+            print y
+            print clicks
+            '''
+
+            yield torch.tensor(input_nids), torch.tensor(input_offset), torch.tensor(y), torch.tensor(clicks)
+            self.__offset = (self.__offset + self.batch_size) % len(self.x)
+
+
 
 if __name__=='__main__':
     if len(sys.argv)!=3:
@@ -99,12 +129,12 @@ if __name__=='__main__':
     model_save_path = sys.argv[2]
 
     EmbeddingSize = 128
-    train, valid, test = utils.readdata(data_dir, test_num=1000)
+    train, valid, test = utils.readdata(data_dir, test_num=10000)
 
     data = DataLoader(train)
     model = FC_DNN(data.movie_count, EmbeddingSize)
-    optimizer = optim.SGD(model.parameters(), lr=0.005)
-    #optimizer = optim.Adam(model.parameters(), lr=0.01)
+    #optimizer = optim.SGD(model.parameters(), lr=0.005)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
@@ -114,23 +144,26 @@ if __name__=='__main__':
 
     class Trainer: 
         def __init__(self):
-            self.test_y = []
-            self.test_y_ = []
+            self.test_inputs = []
 
         def fwbp(self):
-            x, y, clicks = generator.next()
+            input_nids, input_offset, y, clicks = generator.next()
+            self.test_inputs.append( (input_nids, input_offset, y, clicks) )
 
             #print x, y, clicks
-            clicks_ = model.forward(x, y)
+            clicks_ = model.forward(input_nids, input_offset, y)
         
             # temp test auc for testing.
-            for idx in range(len(clicks)):
-                self.test_y.append( clicks[idx].long().item() )
-                self.test_y_.append( clicks_[idx].item() )
-            if len(self.test_y)>=1000:
-                easy_train.easy_auc(self.test_y_, self.test_y)
-                self.test_y = []
-                self.test_y_ = []
+            if sum(map(lambda x:len(x[3]), self.test_inputs))>=len(data.x)* 2:
+                all_y_ = []
+                all_y = []
+                for a,b,c,y in self.test_inputs:
+                    y_ = model.forward(a,b,c)
+                    all_y_ += y_.squeeze().tolist()
+                    all_y += y.tolist()
+
+                easy_train.easy_auc(all_y_, all_y)
+                self.test_inputs = []
 
             #print clicks_, clicks
             loss = loss_fn(clicks_, clicks)
