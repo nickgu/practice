@@ -16,7 +16,40 @@ import utils
 sys.path.append('../learn_pytorch')
 import easy_train
 
+import tqdm
 import numpy as np
+
+class TrainData:
+    def __init__(self, filename):
+        self.__fd = file(filename, 'w')
+        self.__filename = filename
+
+    def write(self, x, y):
+        print >> self.__fd, '%s\t%s' % (','.join(map(lambda x:str(x), x)), y)
+
+    def write_over(self):
+        self.__fd.close()
+        self.__fd = file(self.__filename, 'r')
+
+    def read(self):
+        line = self.__fd.readline()
+        if line == '':
+            print >> sys.stderr, 'Complete epoch.'
+            self.__fd = file(self.__filename, 'r')
+        x, y = line.strip().split('\t')
+        x = map(lambda x:int(x), x.split(','))
+        y = int(y)
+        return x, y
+
+    def read_batch(self, batch_size=100):
+        rx = []
+        ry = []
+        for i in range(batch_size):
+            x, y = self.read()
+            rx.append(x)
+            ry.append(y)
+        return rx, ry
+        
 
 class FC_DNN(nn.Module):
     def __init__(self, movie_count, embedding_size):
@@ -46,15 +79,16 @@ class FC_DNN(nn.Module):
 
 class DataLoader:
     def __init__(self, train):
-        self.x = []
-        self.y = []
         max_movie_id = 0
 
         self.batch_size = 200
-        self.epoch = 0
-        self.__offset = 0
+        self.data_count = 0
 
-        for uid, views in train:
+        filename = 'temp/train.data'
+        self.train_data = TrainData(filename)
+
+        write_progress = tqdm.tqdm(train)
+        for uid, views in write_progress:
             clicks = map(lambda x:int(x[0]), filter(lambda x:x[1]==1, views))
             if len(clicks)==0:
                 continue
@@ -66,45 +100,35 @@ class DataLoader:
                 y = clicks[idx]
                 if len(x)<3:
                     continue
-                self.x.append(x)
-                self.y.append(y)
+                
+                self.train_data.write(x, y)
+                self.data_count += 1
 
-        '''
-        test_num = 10000
-        self.x = self.x[:test_num]
-        self.y = self.y[:test_num]
-
-        print self.x
-        print self.y
-        '''
-
+        self.train_data.write_over()
         self.movie_count = max_movie_id + 1
         pydev.log('max_movie_id=%d' % self.movie_count)
-        pydev.log('data_count=%d' % len(self.x))
+        pydev.log('data_count=%d' % self.data_count)
+
         
     def data_generator(self):
         while True:
-            if self.__offset + self.batch_size > len(self.x):
-                self.epoch += 1
-                print >> sys.stderr, 'Epoch %d' % self.epoch
-
+            # batch for embeddings.
             input_nids = []
             input_offset = []
             y = []
             clicks = []
             
             for i in range(self.batch_size):
-                idx = (self.__offset + i) % len(self.x)
+                a, b = self.train_data.read()
 
                 input_offset.append(len(input_nids))
-                input_nids += self.x[idx]
-                y.append( self.y[idx] )
+                input_nids += a
+                y.append( b )
                 clicks.append( 1. )
 
                 # negative sample.
-                idx = random.randint(0, len(self.x)-1)
                 input_offset.append(len(input_nids))
-                input_nids += self.x[idx]
+                input_nids += a
                 y.append( random.randint(0, self.movie_count-1) )
                 clicks.append( 0. )
 
@@ -116,7 +140,6 @@ class DataLoader:
             '''
 
             yield torch.tensor(input_nids), torch.tensor(input_offset), torch.tensor(y), torch.tensor(clicks)
-            self.__offset = (self.__offset + self.batch_size) % len(self.x)
 
 
 
@@ -129,9 +152,12 @@ if __name__=='__main__':
     model_save_path = sys.argv[2]
 
     EmbeddingSize = 128
-    train, valid, test = utils.readdata(data_dir, test_num=10000)
+
+    train, valid, test = utils.readdata(data_dir)
 
     data = DataLoader(train)
+    del train
+
     model = FC_DNN(data.movie_count, EmbeddingSize)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -154,7 +180,7 @@ if __name__=='__main__':
             clicks_ = model.forward(input_nids, input_offset, y)
         
             # temp test auc for testing.
-            if sum(map(lambda x:len(x[3]), self.test_inputs))>=len(data.x)* 2:
+            if sum(map(lambda x:len(x[3]), self.test_inputs))>=data.data_count * 2:
                 all_y_ = []
                 all_y = []
                 for a,b,c,y in self.test_inputs:
@@ -177,5 +203,4 @@ if __name__=='__main__':
     easy_train.easy_train(trainer.fwbp, optimizer, 200000)
 
     torch.save(model.state_dict(), model_save_path)
-
 

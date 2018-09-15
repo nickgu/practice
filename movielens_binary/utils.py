@@ -32,7 +32,8 @@ def measure(predictor, test, debug=False):
     generator = test
     if debug:
         generator = test[:1]
-    for uid, items in generator:
+    progress = tqdm.tqdm(generator)
+    for uid, items in progress:
         m = len(items) / 2
         input = items[:m]
         ans = filter(lambda x:x[1]==1, items[m:])
