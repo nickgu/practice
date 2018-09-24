@@ -138,7 +138,7 @@ if __name__=='__main__':
     model_save_path = sys.argv[2]
 
     EmbeddingSize = 128
-    test_num = 10000
+    test_num = -1
 
     train, valid, test = utils.readdata(data_dir, test_num=test_num)
 
@@ -187,7 +187,8 @@ if __name__=='__main__':
 
     trainer = Trainer()
 
-    easy_train.easy_train(trainer.fwbp, optimizer, 200000)
+    iter_count = 1 * data.data_count / data.batch_size
+    easy_train.easy_train(trainer.fwbp, optimizer, iter_count)
 
     torch.save(model.state_dict(), model_save_path)
 

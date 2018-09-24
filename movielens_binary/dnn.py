@@ -20,8 +20,8 @@ import tqdm
 import numpy as np
 
 class TrainData:
-    def __init__(self, filename):
-        self.__fd = file(filename, 'w')
+    def __init__(self, filename, mode='w'):
+        self.__fd = file(filename, mode)
         self.__filename = filename
 
     def write(self, x, y):
@@ -36,6 +36,9 @@ class TrainData:
         if line == '':
             print >> sys.stderr, 'Complete epoch.'
             self.__fd = file(self.__filename, 'r')
+            line = self.__fd.readline()
+            if line == '':
+                raise Exception('Cannot reopen file to read.')
         x, y = line.strip().split('\t')
         x = map(lambda x:int(x), x.split(','))
         y = int(y)
@@ -78,14 +81,17 @@ class FC_DNN(nn.Module):
 
 
 class DataLoader:
-    def __init__(self, train):
+    def __init__(self, train, device):
         max_movie_id = 0
 
         self.batch_size = 200
         self.data_count = 0
+        self.device = device
 
         filename = 'temp/train.data'
-        self.train_data = TrainData(filename)
+
+        self.train_data = TrainData(filename, 'r')
+        # self.train_data = TrainData(filename)
 
         write_progress = tqdm.tqdm(train)
         for uid, views in write_progress:
@@ -101,10 +107,10 @@ class DataLoader:
                 if len(x)<3:
                     continue
                 
-                self.train_data.write(x, y)
+                #self.train_data.write(x, y)
                 self.data_count += 1
 
-        self.train_data.write_over()
+        # self.train_data.write_over()
         self.movie_count = max_movie_id + 1
         pydev.log('max_movie_id=%d' % self.movie_count)
         pydev.log('data_count=%d' % self.data_count)
@@ -139,7 +145,11 @@ class DataLoader:
             print clicks
             '''
 
-            yield torch.tensor(input_nids), torch.tensor(input_offset), torch.tensor(y), torch.tensor(clicks)
+            yield torch.tensor(input_nids).to(self.device),torch.tensor(input_offset).to(self.device), torch.tensor(y).to(self.device), torch.tensor(clicks).to(self.device)
+            del input_nids
+            del input_offset
+            del y
+            del clicks
 
 
 
@@ -148,17 +158,19 @@ if __name__=='__main__':
         print >> sys.stderr, 'Usage:\ndnn.py <datadir> <model>'
         sys.exit(-1)
 
+    device = torch.device('cuda')
+
     data_dir = sys.argv[1]
     model_save_path = sys.argv[2]
 
-    EmbeddingSize = 128
+    EmbeddingSize = 32
 
     train, valid, test = utils.readdata(data_dir)
 
-    data = DataLoader(train)
+    data = DataLoader(train, device)
     del train
 
-    model = FC_DNN(data.movie_count, EmbeddingSize)
+    model = FC_DNN(data.movie_count, EmbeddingSize).to(device)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
@@ -174,12 +186,13 @@ if __name__=='__main__':
 
         def fwbp(self):
             input_nids, input_offset, y, clicks = generator.next()
-            self.test_inputs.append( (input_nids, input_offset, y, clicks) )
+            #self.test_inputs.append( (input_nids, input_offset, y, clicks) )
 
             #print x, y, clicks
             clicks_ = model.forward(input_nids, input_offset, y)
         
             # temp test auc for testing.
+            '''
             if sum(map(lambda x:len(x[3]), self.test_inputs))>=data.data_count * 2:
                 all_y_ = []
                 all_y = []
@@ -190,12 +203,14 @@ if __name__=='__main__':
 
                 easy_train.easy_auc(all_y_, all_y)
                 self.test_inputs = []
+            '''
 
             #print clicks_, clicks
             loss = loss_fn(clicks_, clicks)
             loss.backward()
 
             #print clicks, clicks_, loss[0]
+            del input_nids, input_offset, y, clicks
             return loss[0]
 
     trainer = Trainer()
