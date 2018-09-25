@@ -76,9 +76,10 @@ class TrainData:
         
 
 class DataLoader:
-    def __init__(self, train):
+    def __init__(self, train, device):
         max_movie_id = 0
 
+        self.device = device
         self.batch_size = 200
         self.data_count = 0
         self.window_size = 2
@@ -127,25 +128,28 @@ class DataLoader:
                 y.append( random.randint(0, self.movie_count-1) )
                 clicks.append( 0. )
 
-            yield torch.tensor(x), torch.tensor(y), torch.tensor(clicks)
+            yield torch.tensor(x).to(self.device), torch.tensor(y).to(self.device), torch.tensor(clicks).to(self.device)
 
 if __name__=='__main__':
     if len(sys.argv)!=3:
         print >> sys.stderr, 'Usage:\ndnn.py <datadir> <model>'
         sys.exit(-1)
 
+    device = torch.device('cuda')
+
     data_dir = sys.argv[1]
     model_save_path = sys.argv[2]
 
-    EmbeddingSize = 128
+    EpochCount = 1
+    EmbeddingSize = 32
     test_num = -1
 
     train, valid, test = utils.readdata(data_dir, test_num=test_num)
 
-    data = DataLoader(train)
+    data = DataLoader(train, device)
     del train
 
-    model = DSSM(data.movie_count, EmbeddingSize)
+    model = DSSM(data.movie_count, EmbeddingSize).to(device)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
@@ -161,12 +165,13 @@ if __name__=='__main__':
 
         def fwbp(self):
             x, y, clicks = generator.next()
-            self.test_inputs.append( (x, y, clicks) )
+            #self.test_inputs.append( (x, y, clicks) )
 
             #print x, y, clicks
             clicks_ = model.forward(x, y)
         
             # temp test auc for testing.
+            '''
             if sum(map(lambda x:len(x[0]), self.test_inputs))>= 100000:
                 all_y_ = []
                 all_y = []
@@ -177,6 +182,7 @@ if __name__=='__main__':
 
                 easy_train.easy_auc(all_y_, all_y)
                 self.test_inputs = []
+            '''
 
             #print clicks_, clicks
             loss = loss_fn(clicks_, clicks)
@@ -187,7 +193,7 @@ if __name__=='__main__':
 
     trainer = Trainer()
 
-    iter_count = 1 * data.data_count / data.batch_size
+    iter_count = EpochCount * data.data_count / data.batch_size
     easy_train.easy_train(trainer.fwbp, optimizer, iter_count)
 
     torch.save(model.state_dict(), model_save_path)
