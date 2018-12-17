@@ -2,6 +2,10 @@
 
 ## Data Construction
 
+how to generate data:
+`
+ml_binary_reader.py rating.csv output_dir
+`
 
 ## File Description
 
