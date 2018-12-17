@@ -59,9 +59,13 @@ def measure(predictor, test, debug=False):
         P.append( hit * 1.0 / len(output) )
         R.append( hit * 1.0 / len(ans) )
 
+    precision = sum(P) * 100.0 / len(P)
+    recall = sum(R) * 100.0 / len(R)
     print 'answers per user: %.2f' % (total_answers * 1.0 / len(test)) 
-    print 'P : %.2f%%' % (sum(P) * 100.0 / len(P))
-    print 'R : %.2f%%' % (sum(R) * 100.0 / len(R))
+    print 'P : %.2f%%' % precision
+    print 'R : %.2f%%' % recall
+    print 'F : %.2f%%' % (precision*recall*2. / (precision + recall))
+
 
 if __name__=='__main__':
     train, valid, test = readdata(sys.argv[1])
