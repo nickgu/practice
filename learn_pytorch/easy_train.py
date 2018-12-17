@@ -10,6 +10,10 @@ import torch
 import torch.nn as nn
 import tqdm
 
+def dump_embeddings(emb, fd):
+    for emb in emb.weight:
+        print >> fd, ','.join(map(lambda x:str(x), emb.tolist()))
+
 def easy_auc(pred, y, reorder=True):
     import sklearn.metrics as M
     tpr, fpr, threshold = M.roc_curve(y, pred, reorder)

@@ -36,11 +36,16 @@ class DSSM(nn.Module):
         x_emb = self.input_emb(input_item)
         y_emb = self.nid_emb(cooc_item)
 
+        y = F.cosine_similarity(x_emb, y_emb) * 0.5 + 0.5
+
+        '''
         x_ = torch.cat((x_emb, y_emb), 1)
         x_ = F.relu(self.fc1(x_))
         x_ = F.relu(self.fc2(x_))
         x_ = F.relu(self.fc3(x_))
         y = F.sigmoid( self.fc4(x_) )
+        print y.size()
+        '''
         return y
 
 class TrainData:
@@ -197,4 +202,11 @@ if __name__=='__main__':
     easy_train.easy_train(trainer.fwbp, optimizer, iter_count)
 
     torch.save(model.state_dict(), model_save_path)
+
+    input_emb_fd = file('temp/input_emb.txt', 'w')
+    easy_train.dump_embeddings(model.input_emb, input_emb_fd)
+
+    nid_emb_fd = file('temp/nid_emb.txt', 'w')
+    easy_train.dump_embeddings(model.nid_emb, nid_emb_fd)
+
 
