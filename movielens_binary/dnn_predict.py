@@ -28,6 +28,8 @@ def algor_dnn_predict(train, valid, test, topN):
         readset = set(map(lambda x:x[0], items))
 
         ans = []
+        # TODO
+        #  writing predictor code.
         for item in map(lambda x:x[0], top):
             if item in readset:
                 continue

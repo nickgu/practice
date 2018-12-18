@@ -56,6 +56,9 @@ class TrainData:
 
 class FC_DNN(nn.Module):
     def __init__(self, movie_count, embedding_size):
+        # Ranking model:
+        # input emb_size * 2 (embbag of input, emb of item to predict)
+        # fc x 4
         nn.Module.__init__(self)
         
         self.input_embbag = nn.EmbeddingBag(movie_count, embedding_size, mode='mean')
