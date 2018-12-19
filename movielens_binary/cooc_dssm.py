@@ -26,26 +26,11 @@ class DSSM(nn.Module):
         self.input_emb = nn.Embedding(movie_count, embedding_size)
         self.nid_emb = nn.Embedding(movie_count, embedding_size)
 
-        self.fc1 = nn.Linear(embedding_size*2, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
-
     def forward(self, input_item, cooc_item):
-
         x_emb = self.input_emb(input_item)
         y_emb = self.nid_emb(cooc_item)
 
         y = F.cosine_similarity(x_emb, y_emb) * 0.5 + 0.5
-
-        '''
-        x_ = torch.cat((x_emb, y_emb), 1)
-        x_ = F.relu(self.fc1(x_))
-        x_ = F.relu(self.fc2(x_))
-        x_ = F.relu(self.fc3(x_))
-        y = F.sigmoid( self.fc4(x_) )
-        print y.size()
-        '''
         return y
 
 class TrainData:
@@ -137,7 +122,7 @@ class DataLoader:
 
 if __name__=='__main__':
     if len(sys.argv)!=3:
-        print >> sys.stderr, 'Usage:\ndnn.py <datadir> <model>'
+        print >> sys.stderr, 'Usage:\ncooc_dssm.py <datadir> <model>'
         sys.exit(-1)
 
     device = torch.device('cuda')

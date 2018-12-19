@@ -27,6 +27,48 @@ class ItemIndex:
         
         self.index.build(32)
         
+class EmbeddingDict:
+    def __init__(self, filename, seperator=',', contain_key=True, metric='angular'):
+        '''
+            File format(contain_key=True): 
+               <key>[tab]<num>,<num>,... 
+
+            File format(contain_key=False): 
+               <num>,<num>,... 
+        '''
+        self.index = None # lazy create.
+        self.emb_size = 0
+
+        fd = file(filename)
+        line_count = 0
+        valid_count = 0
+        for line in fd.readlines():
+            if contain_key:
+                key, value = line.strip().split('\t')
+            else:
+                key = line_count
+                value = line.strip()
+
+            line_count += 1
+            value = value.split(',')
+
+            d = len(value)
+            if self.index is None:
+                # first create.
+                self.emb_size = d
+                self.index = annoy.AnnoyIndex(f=self.emb_size, metric=metric)
+                pydev.info('set emb_size=%d metric=%s' % (self.emb_size, metric))
+            elif d != self.emb_size:
+                continue
+
+            vec = map(lambda x:float(x), value)
+            self.index.add_item(int(key), vec)
+            valid_count += 1
+        
+        pydev.info('emb load over, begin to build index..')
+        self.index.build(32)
+        pydev.info('EmbeddingDict load over: valid_count=%d, line_count=%d' %(valid_count, line_count))
+        
 
 if __name__=='__main__':
     import numpy as np
