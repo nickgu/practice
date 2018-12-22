@@ -11,7 +11,7 @@ def readfile(fd, test_num=-1):
     for line in fd.readlines():
         uid, items = line.split('\t')
         d = map(lambda x:x.split(':'), items.split(','))
-        d = map(lambda x:(x[0], int(x[1]), int(x[2])), d)
+        d = map(lambda x:(int(x[0]), int(x[1]), int(x[2])), d)
         data.append( (uid, d))
         if test_num>0 and len(data)>=test_num:
             break

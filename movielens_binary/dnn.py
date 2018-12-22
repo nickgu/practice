@@ -61,7 +61,7 @@ class FC_DNN(nn.Module):
         # fc x 4
         nn.Module.__init__(self)
         
-        self.input_embbag = nn.EmbeddingBag(movie_count, embedding_size, mode='mean')
+        self.input_embbag = nn.EmbeddingBag(movie_count, embedding_size, mode='sum')
         self.nid_emb = nn.Embedding(movie_count, embedding_size)
 
         self.fc1 = nn.Linear(embedding_size*2, 256)

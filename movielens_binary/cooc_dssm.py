@@ -19,15 +19,15 @@ import easy_train
 import tqdm
 import numpy as np
 
-class DSSM(nn.Module):
+class COOC_DSSM(nn.Module):
     def __init__(self, movie_count, embedding_size):
         nn.Module.__init__(self)
         
-        self.input_emb = nn.Embedding(movie_count, embedding_size)
+        #self.input_emb = nn.Embedding(movie_count, embedding_size)
         self.nid_emb = nn.Embedding(movie_count, embedding_size)
 
     def forward(self, input_item, cooc_item):
-        x_emb = self.input_emb(input_item)
+        x_emb = self.nid_emb(input_item)
         y_emb = self.nid_emb(cooc_item)
 
         y = F.cosine_similarity(x_emb, y_emb) * 0.5 + 0.5
@@ -139,9 +139,9 @@ if __name__=='__main__':
     data = DataLoader(train, device)
     del train
 
-    model = DSSM(data.movie_count, EmbeddingSize).to(device)
+    model = COOC_DSSM(data.movie_count, EmbeddingSize).to(device)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
