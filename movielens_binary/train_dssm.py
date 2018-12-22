@@ -110,8 +110,8 @@ if __name__=='__main__':
     data = DataLoader(train, device)
 
     model = DSSM(data.movie_count, EmbeddingSize).to(device)
-    #optimizer = optim.SGD(model.parameters(), lr=0.005)
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    #optimizer = optim.SGD(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
