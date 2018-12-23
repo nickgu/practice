@@ -41,13 +41,13 @@ class UID_NID_DSSM(nn.Module):
 class DataGenerator:
     def __init__(self, train, device, epoch_count, batch_size):
         max_movie_id = 0
+        max_user_id = 0
 
         self.epoch_count = epoch_count
         self.batch_size = batch_size
         self.data_count = 0
         self.device = device
         self.train = train
-        self.user_count = len(train)
 
         write_progress = tqdm.tqdm(train)
         for uid, views in write_progress:
@@ -56,13 +56,16 @@ class DataGenerator:
                 continue
             
             max_movie_id = max(max_movie_id, max(clicks))
+            max_user_id = max(max_user_id, uid)
             self.data_count += len(views)
 
         self.train_iter_count = self.epoch_count * self.data_count / self.batch_size
 
-        # self.train_data.write_over()
+        self.user_count = max_user_id + 1
         self.movie_count = max_movie_id + 1
-        pydev.log('max_movie_id=%d' % self.movie_count)
+
+        pydev.log('user_count=%d' % self.user_count)
+        pydev.log('movie_count=%d' % self.movie_count)
         pydev.log('data_count=%d' % self.data_count)
 
         
@@ -104,8 +107,9 @@ if __name__=='__main__':
         print >> sys.stderr, 'Usage:\ndnn.py <datadir>'
         sys.exit(-1)
 
-    EmbeddingSize = 128
-    EpochCount = 2
+    TestNum = 1000
+    EmbeddingSize = 256
+    EpochCount = 30
     BatchSize = 500
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
@@ -116,12 +120,12 @@ if __name__=='__main__':
 
     data_dir = sys.argv[1]
 
-    train, valid, test = utils.readdata(data_dir)
+    train, valid, test = utils.readdata(data_dir, test_num=TestNum)
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize)
 
     model = UID_NID_DSSM(data.user_count, data.movie_count, EmbeddingSize).to(device)
-    #optimizer = optim.SGD(model.parameters(), lr=0.0001)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.SGD(model.parameters(), lr=0.0001)
+    #optimizer = optim.Adam(model.parameters(), lr=0.005)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
