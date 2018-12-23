@@ -24,8 +24,8 @@ class UID_NID_DSSM(nn.Module):
         # cosine(user_embedding, item_embedding)
         nn.Module.__init__(self)
         
-        self.user_emb = nn.Embedding(user_count, embedding_size)
-        self.item_emb = nn.Embedding(movie_count, embedding_size)
+        self.user_emb = nn.Embedding(user_count, embedding_size, max_norm=EmbeddingSize*0.1)
+        self.item_emb = nn.Embedding(movie_count, embedding_size, max_norm=EmbeddingSize*0.1)
 
     def forward(self, uid, nid):
         # sum up embeddings.
@@ -109,8 +109,8 @@ if __name__=='__main__':
 
     TestNum = 1000
     EmbeddingSize = 256
-    EpochCount = 30
-    BatchSize = 500
+    EpochCount = 120
+    BatchSize = 256
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
@@ -124,8 +124,8 @@ if __name__=='__main__':
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize)
 
     model = UID_NID_DSSM(data.user_count, data.movie_count, EmbeddingSize).to(device)
-    optimizer = optim.SGD(model.parameters(), lr=0.0001)
-    #optimizer = optim.Adam(model.parameters(), lr=0.005)
+    #optimizer = optim.SGD(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()
