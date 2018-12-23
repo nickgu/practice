@@ -21,17 +21,24 @@ def easy_auc(pred, y, reorder=True):
     print >> sys.stderr, pydev.ColorString.yellow(' >>> EASY_AUC_TEST: %.4f (%d items) <<<' % (auc, len(pred)))
     return auc
 
-def easy_train(forward_and_backward_fn, optimizer, iteration_count):
+def easy_train(forward_and_backward_fn, optimizer, iteration_count, loss_curve_output=None):
     process_bar = tqdm.tqdm(range(int(iteration_count)))
     acc_loss = 1.0
-    for i in process_bar:
-        optimizer.zero_grad()
-        cur_loss = forward_and_backward_fn()
-        optimizer.step()
+    try:
+        for iter_num in process_bar:
+            optimizer.zero_grad()
+            cur_loss = forward_and_backward_fn()
+            optimizer.step()
 
-        acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
-        process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
-                                    (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
+            acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
+            if loss_curve_output:
+                print >> loss_curve_output, '%d,%.3f,%.3f' % (iter_num, acc_loss, cur_loss)
+            process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
+                                        (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
+
+    except:
+        pydev.err('Training Exception(may be interrupted by control.)')
+
 
 def easy_test(model, x, y):
     # easy test for multiclass output.
