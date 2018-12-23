@@ -36,7 +36,8 @@ def easy_train(forward_and_backward_fn, optimizer, iteration_count, loss_curve_o
             process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
                                         (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
 
-    except:
+    except Exception, e:
+        pydev.err(e)
         pydev.err('Training Exception(may be interrupted by control.)')
 
 

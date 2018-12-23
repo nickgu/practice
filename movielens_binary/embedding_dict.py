@@ -83,18 +83,28 @@ if __name__=='__main__':
         movie_info[movie_id] = title+' : '+genres
 
     while True:
+        sys.stdout.write('Query: ')
+        query_id = sys.stdin.readline().strip()
         try:
-            sys.stdout.write('Query: ')
-            query_id = input()
-            query = str(query_id)
+            if query_id.startswith('d'):
+                d, a, b = query_id.split(':')
+                a = int(a)
+                b = int(b)
+                dist = index.index.get_distance(a, b)
+                print 'distance of [%d] and [%d] : %.3f' % (a, b, dist)
 
-            print '%s: %s' % (query, movie_info.get(query,'not_found.')) 
+            else:
+                query_id = int(query_id)
+                query = str(query_id)
 
-            print '--- Search Result ---'
-            ans, dis = index.index.get_nns_by_item(query_id, n=30, include_distances=True)
-            for item, score in zip(ans, dis):
-                item = str(item)
-                print '%s [%.3f] %s' %(item, score, movie_info.get(item,'none.'))
-            print 
-        except:
+                print '%s: %s' % (query, movie_info.get(query,'not_found.')) 
+                print '--- Search Result ---'
+                ans, dis = index.index.get_nns_by_item(query_id, n=30, include_distances=True)
+                for item, score in zip(ans, dis):
+                    item = str(item)
+                    print '%s [%.3f] %s' %(item, score, movie_info.get(item,'none.'))
+                print 
+
+        except Exception, e:
+            pydev.err(e)
             pydev.err('runtime error..')
