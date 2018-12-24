@@ -26,7 +26,7 @@ class MovieLensRatingsBinaryReader:
 
             self.data.append( (uid, iid, score) )
 
-    def sample_train_validation_and_test(self, validation_size = 1000, test_size = 1000):
+    def sample_train_validation_and_test(self, validation_size = 500000, test_size = 500000):
 
         # shuffle data.
         random.shuffle(self.data)
@@ -51,7 +51,7 @@ if __name__=='__main__':
 
     fd = file(sys.argv[1])
     reader = MovieLensRatingsBinaryReader(fd)
-    print >> sys.stderr, 'Load over data=%d' % (len(self.data))
+    print >> sys.stderr, 'Load over data=%d' % (len(reader.data))
     train, validation, test = reader.sample_train_validation_and_test()
     print >> sys.stderr, 'Genrate set over, begin dumpping.'
 
