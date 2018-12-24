@@ -71,39 +71,40 @@ class EmbeddingDict:
         
 
 if __name__=='__main__':
-    import numpy as np
-    from scipy import spatial
+    filename = sys.argv[1]
+    index = EmbeddingDict(filename, contain_key=False, metric='dot')
 
-    fd = file(sys.argv[1])
-    vec_dict = {}
-    for line in fd.readlines():
-        row = line.strip().split(' ')
-        if len(row)!=101:
-            continue
-        key = row[0]
-        if key == '':
-            continue
+    # load movielens movie_info.
+    movie_info = {}
+    for row in pydev.foreach_row(file('data/ml-20m/movies.csv'), seperator=','):
+        movie_id = row[0]
+        genres = row[-1]
+        title = ','.join(row[1:-1])
+        movie_info[movie_id] = title+' : '+genres
 
-        key = int(key)
-        vec = map(lambda x:float(x), row[1:])
-
-        vec_dict[key] = np.array(vec)
-    print >> sys.stderr, 'load ok!'
-
-    while 1:
-        line = sys.stdin.readline()
-        a, b = line.strip().split(',')
-        print a, b
-
+    while True:
+        sys.stdout.write('Query: ')
+        query_id = sys.stdin.readline().strip()
         try:
-            va = vec_dict[int(a)]
-            vb = vec_dict[int(b)]
-            print 'dot: %.3f' % (va.dot(vb))
-            print 'cos: %.3f' % (1.0 - spatial.distance.cosine(va, vb))
+            if query_id.startswith('d'):
+                d, a, b = query_id.split(':')
+                a = int(a)
+                b = int(b)
+                dist = index.index.get_distance(a, b)
+                print 'distance of [%d] and [%d] : %.3f' % (a, b, dist)
 
-        except:
-            print 'Error!'
-            continue
+            else:
+                query_id = int(query_id)
+                query = str(query_id)
 
-        
+                print '%s: %s' % (query, movie_info.get(query,'not_found.')) 
+                print '--- Search Result ---'
+                ans, dis = index.index.get_nns_by_item(query_id, n=30, include_distances=True)
+                for item, score in zip(ans, dis):
+                    item = str(item)
+                    print '%s [%.3f] %s' %(item, score, movie_info.get(item,'none.'))
+                print 
 
+        except Exception, e:
+            pydev.err(e)
+            pydev.err('runtime error..')

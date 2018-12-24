@@ -61,6 +61,7 @@ class MovieLensRatingsBinaryReader:
 
 
 if __name__=='__main__':
+    # Movielens Data Generator.
     # generate datasets from rating.csv
     #   
     #   ml_binary_reader.py rating.csv output_data
