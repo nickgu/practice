@@ -6,6 +6,8 @@
 import sys
 import tqdm
 
+import pydev
+
 import sklearn
 from sklearn import metrics
 
@@ -35,18 +37,23 @@ def readdata(dir, test_num=-1):
     return train, valid, test
 
 def measure(predictor, test, debug=False):
-
     progress = tqdm.tqdm(test)
     y = []
     y_ = []
+
+    debug_fd = None
+    if debug:
+        debug_fd = file('log/debug.log', 'w')
     for uid, iid, score in progress:
-        pred_score = predictor(uid, iid)
+        pred_score = predictor(uid, iid, debug_fd)
+        if debug:
+            print >> debug_fd, '%s\t%s\t%d\t%.3f' % (uid, iid, score, pred_score)
         
         y.append( score )
         y_.append( pred_score )
 
     auc = metrics.roc_auc_score(y, y_)
-    pydev.info('Test AUC: %.3f' % auc)
+    pydev.log('Test AUC: %.3f' % auc)
     
 
 if __name__=='__main__':

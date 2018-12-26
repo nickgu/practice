@@ -155,7 +155,8 @@ def algor_embeddings(train, valid, test, topN):
 
 if __name__=='__main__':
     TopN = 10
-    TestNum = 100
+    TestNum = -1
+    #TestNum = 100
 
     print >> sys.stderr, 'begin loading data..'
     train, valid, test = utils.readdata('data', test_num=TestNum)
