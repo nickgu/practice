@@ -19,7 +19,7 @@ import easy_train
 import tqdm
 import numpy as np
 
-class DNNRank(nn.Module):
+class LRRank(nn.Module):
     def __init__(self, user_count, item_count, embedding_size):
         # Ranking model:
         # input emb_size * 2 (embbag of input, emb of item to predict)
@@ -28,23 +28,15 @@ class DNNRank(nn.Module):
         
         self.uid_emb = nn.Embedding(user_count, embedding_size)
         self.iid_emb = nn.Embedding(item_count, embedding_size)
-
-        self.fc1 = nn.Linear(embedding_size*2, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
+        self.lr = nn.Linear(embedding_size*2, 1)
 
     def forward(self, uid, iid):
 
         # sum up embeddings.
         user_emb = self.uid_emb(uid)
         item_emb = self.iid_emb(iid)
-
         x_ = torch.cat((user_emb, item_emb), 1)
-        x_ = F.relu(self.fc1(x_))
-        x_ = F.relu(self.fc2(x_))
-        x_ = F.relu(self.fc3(x_))
-        y = F.sigmoid( self.fc4(x_) )
+        y = F.sigmoid( self.lr(x_) )
         return y
 
 class DataGenerator:
@@ -104,9 +96,9 @@ if __name__=='__main__':
         sys.exit(-1)
 
     TestNum = -1
-    EmbeddingSize = 256
+    EmbeddingSize = 32
     EpochCount = 5
-    BatchSize = 256
+    BatchSize = 32
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
@@ -120,7 +112,7 @@ if __name__=='__main__':
     train, valid, test = utils.readdata(data_dir, test_num=TestNum)
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize)
 
-    model = DNNRank(data.user_count, data.movie_count, EmbeddingSize).to(device)
+    model = LRRank(data.user_count, data.movie_count, EmbeddingSize).to(device)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
