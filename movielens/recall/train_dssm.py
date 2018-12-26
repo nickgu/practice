@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import pydev
 import utils
 
-sys.path.append('../learn_pytorch')
+sys.path.append('../../learn_pytorch')
 import easy_train
 
 import tqdm
