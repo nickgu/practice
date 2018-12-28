@@ -100,19 +100,19 @@ class DataGenerator:
 
 if __name__=='__main__':
     if len(sys.argv)!=3:
-        print >> sys.stderr, 'Usage:\ndnn.py <datadir> <model>'
+        print >> sys.stderr, 'Usage:\ntrain_dnn.py <datadir> <model>'
         sys.exit(-1)
 
     TestNum = -1
-    EmbeddingSize = 256
-    EpochCount = 5
-    BatchSize = 256
+    EmbeddingSize = 128
+    EpochCount = 2
+    BatchSize = 1024
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
     pydev.info('BatchSize=%d' % BatchSize)
 
-    device = torch.device('cpu')
+    device = torch.device('cuda')
 
     data_dir = sys.argv[1]
     model_save_path = sys.argv[2]
