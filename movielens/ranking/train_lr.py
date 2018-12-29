@@ -26,12 +26,15 @@ class LRRank(nn.Module):
         # fc x 4
         nn.Module.__init__(self)
         
+        pydev.info('user_count=%d' % user_count)
+        pydev.info('item_count=%d' % item_count)
+        pydev.info('embedding=%d' % embedding_size)
+
         self.uid_emb = nn.Embedding(user_count, embedding_size)
         self.iid_emb = nn.Embedding(item_count, embedding_size)
         self.lr = nn.Linear(embedding_size*2, 1)
 
     def forward(self, uid, iid):
-
         # sum up embeddings.
         user_emb = self.uid_emb(uid)
         item_emb = self.iid_emb(iid)
@@ -96,8 +99,8 @@ if __name__=='__main__':
         sys.exit(-1)
 
     TestNum = -1
-    EmbeddingSize = 32
-    EpochCount = 5
+    EmbeddingSize = 8
+    EpochCount = 3
     BatchSize = 32
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
@@ -114,7 +117,7 @@ if __name__=='__main__':
 
     model = LRRank(data.user_count, data.movie_count, EmbeddingSize).to(device)
     #optimizer = optim.SGD(model.parameters(), lr=0.005)
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.02)
     loss_fn = nn.BCELoss()
     
     generator = data.data_generator()

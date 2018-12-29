@@ -17,7 +17,7 @@ import embedding_dict
 def algor_dssm(train, valid, test, topN):
     index = embedding_dict.EmbeddingDict('temp/dssm_out_emb.txt', contain_key=False, metric='angular')
     embeddingBag = nn.EmbeddingBag(131263, 64, mode='mean')
-    embeddingBag.state_dict = torch.load('temp/dssm.pkl')
+    embeddingBag.load_state_dict( torch.load('temp/dssm.pkl') )
     
     def predict(uid, items):
         readset = set(map(lambda x:x[0], items))

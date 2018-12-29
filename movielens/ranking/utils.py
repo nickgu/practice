@@ -52,6 +52,8 @@ def measure(predictor, test, debug=False):
         y.append( score )
         y_.append( pred_score )
 
+    pydev.info('Predict over')
+
     auc = metrics.roc_auc_score(y, y_)
     pydev.log('Test AUC: %.3f' % auc)
     
