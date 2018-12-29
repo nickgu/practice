@@ -107,7 +107,7 @@ if __name__=='__main__':
     pydev.info('Epoch=%d' % EpochCount)
     pydev.info('BatchSize=%d' % BatchSize)
 
-    device = torch.device('cpu')
+    device = torch.device('cuda')
 
     data_dir = sys.argv[1]
     model_save_path = sys.argv[2]

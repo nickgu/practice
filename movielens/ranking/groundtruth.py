@@ -19,7 +19,7 @@ class GroundTruthTest(pydev.App):
         TestNum = -1
 
         pydev.info('Begin loading data..')
-        sefl.train, self.valid, self.test = utils.readdata('data', test_num=TestNum)
+        self.train, self.valid, self.test = utils.readdata('data', test_num=TestNum)
         pydev.info('Load over')
 
     def nid_ctr(self):
@@ -63,7 +63,7 @@ class GroundTruthTest(pydev.App):
 
     def lr(self):
         import train_lr
-        model = train_lr.LRRank(138494, 126091, 8)
+        model = train_lr.LRRank(138494, 131263, 8)
         model.load_state_dict( torch.load('temp/lr.pkl') )
 
         def predict(uid, iid, debug_fd):
@@ -75,7 +75,23 @@ class GroundTruthTest(pydev.App):
 
             return ret[0].item()
 
-        utils.measure(predict, self.train[:10000], self.debug)
+        utils.measure(predict, self.test, self.debug)
+
+    def lr(self):
+        import train_dnn
+        model = train_dnn.DNNRank(138494, 131263, 16)
+        model.load_state_dict( torch.load('temp/dnn.pkl') )
+
+        def predict(uid, iid, debug_fd):
+            ret = model.forward(
+                    torch.tensor([uid]), 
+                    torch.tensor([iid]))
+
+            print >> debug_fd, '(%s,%s): %s' % (uid, iid, ret[0])
+
+            return ret[0].item()
+
+        utils.measure(predict, self.test, self.debug)
 
 
 if __name__=='__main__':

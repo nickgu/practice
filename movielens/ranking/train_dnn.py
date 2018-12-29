@@ -104,8 +104,8 @@ if __name__=='__main__':
         sys.exit(-1)
 
     TestNum = -1
-    EmbeddingSize = 128
-    EpochCount = 2
+    EmbeddingSize = 16
+    EpochCount = 3
     BatchSize = 1024
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
