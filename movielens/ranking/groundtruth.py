@@ -61,39 +61,6 @@ class GroundTruthTest(pydev.App):
         pydev.info('nid_ctr with ratio smooth')
         utils.measure(predict_ratio_smooth, self.test, debug=self.debug)
 
-    def lr(self):
-        import train_lr
-        model = train_lr.LRRank(138494, 131263, 8)
-        model.load_state_dict( torch.load('temp/lr.pkl') )
-
-        def predict(uid, iid, debug_fd):
-            ret = model.forward(
-                    torch.tensor([uid]), 
-                    torch.tensor([iid]))
-
-            print >> debug_fd, '(%s,%s): %s' % (uid, iid, ret[0])
-
-            return ret[0].item()
-
-        utils.measure(predict, self.test, self.debug)
-
-    def dnn(self):
-        import train_dnn
-        model = train_dnn.DNNRank(138494, 131263, 16)
-        model.load_state_dict( torch.load('temp/dnn.pkl') )
-
-        def predict(uid, iid, debug_fd):
-            ret = model.forward(
-                    torch.tensor([uid]), 
-                    torch.tensor([iid]))
-
-            print >> debug_fd, '(%s,%s): %s' % (uid, iid, ret[0])
-
-            return ret[0].item()
-
-        utils.measure(predict, self.test, self.debug)
-
-
 if __name__=='__main__':
     app = GroundTruthTest()
     app.run()

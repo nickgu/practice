@@ -100,14 +100,14 @@ if __name__=='__main__':
 
     TestNum = -1
     EmbeddingSize = 8
-    EpochCount = 3
-    BatchSize = 32
+    EpochCount = 4
+    BatchSize = 10000
+    device = torch.device('cpu')
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
     pydev.info('BatchSize=%d' % BatchSize)
 
-    device = torch.device('cuda')
 
     data_dir = sys.argv[1]
     model_save_path = sys.argv[2]
