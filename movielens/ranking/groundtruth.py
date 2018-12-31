@@ -77,7 +77,7 @@ class GroundTruthTest(pydev.App):
 
         utils.measure(predict, self.test, self.debug)
 
-    def lr(self):
+    def dnn(self):
         import train_dnn
         model = train_dnn.DNNRank(138494, 131263, 16)
         model.load_state_dict( torch.load('temp/dnn.pkl') )
