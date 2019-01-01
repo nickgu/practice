@@ -11,6 +11,72 @@ import pydev
 import sklearn
 from sklearn import metrics
 
+class MovieInfo:
+    def __init__(self):
+        self.id = None
+        self.title = None
+        self.tags = []
+        self.genres = []
+        self.year = None
+
+    def process(self):
+        if self.title[0] == '"' and self.title[-1]=='"':
+            self.title = self.title[1:-1]
+        if self.title[-1] == ')' and self.title[-7:-5] == ' (':
+            self.year = int(self.title[-5:-1])
+            self.title = self.title[:-7]
+
+def load_movies(path, ignore_tags=False):
+    # load movie basic info.
+    movies = {}
+    for line in file(path + '/movies.csv').readlines():
+        # line may contains more then 2 ','
+        row = line.strip().split(',')
+        movie_id = row[0]
+        title = ','.join(row[1:-1])
+        genres = row[-1]
+        
+        if movie_id == 'movieId':
+            # ignore first line.
+            continue
+    
+        movie = MovieInfo()
+        movie.id = int(movie_id)
+        movie.title = title
+        movie.genres = genres.split('|')
+        movie.process()
+        movies[movie.id] = movie
+    pydev.info('load movie basic info over.')
+
+    if ignore_tags:
+        return movies
+
+    # load tag meta-info.
+    tag_info = {}
+    for tagid, tag in pydev.foreach_row(file(path + '/genome-tags.csv'), seperator=','):
+        if tagid == 'tagId':
+            continue
+        tag_info[tagid] = tag
+    pydev.info('load tags info over.')
+
+    # load genome tags info.
+    tag_match_count = 0
+    for movieid, tagid, score in pydev.foreach_row(file(path + '/genome-scores.csv'), seperator=','):
+        try:
+            key = int(movieid)
+            if key not in movies:
+                continue
+            movies[key].tags.append( (int(tagid), tag_info.get(tagid, ''), float(score)) )
+            tag_match_count += 1
+        except Exception, e:
+            pydev.err(e)
+
+    pydev.info('tag matchs : %d' % tag_match_count)
+
+    return movies
+    
+
+
 def readfile(fd, test_num=-1):
     data = []
     for line in fd.readlines():

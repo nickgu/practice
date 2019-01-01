@@ -10,6 +10,41 @@ import torch
 import torch.nn as nn
 import tqdm
 
+class IndexCoder:
+    def __init__(self):
+        self.tags = []
+        self.index = {}
+
+    def get(self, key):
+        # get the index of key,
+        # if not exists, return None
+        return self.index.get(key, None)
+
+    def alloc(self, key):
+        # get or alloc and index for a key.
+        # if not exists, alloc one.
+        if key not in self.index:
+            idx = len(self.tags)
+            self.index[key] = idx
+            self.tags.append(key)
+            return idx
+        return self.index[key]
+
+    def get_code(self, idx):
+        return self.tags[idx]
+
+    def save(self, fd):
+        for value in self.tags:
+            fd.write('%s' % value)
+
+    def load(self, fd):
+        self.tags = []
+        self.index = {}
+        for tag in fd.readlines():
+            tag = tag.strip()
+            self.index[tag] = len(self.index)
+            self.tags.append(tag)
+
 def dump_embeddings(emb, fd):
     for emb in emb.weight:
         print >> fd, ','.join(map(lambda x:str(x), emb.tolist()))
