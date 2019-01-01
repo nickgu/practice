@@ -19,6 +19,9 @@ import easy_train
 import tqdm
 import numpy as np
 
+import sklearn
+from sklearn import metrics
+
 class DNNRank(nn.Module):
     def __init__(self, user_count, item_count, embedding_size):
         # Ranking model:
@@ -32,7 +35,8 @@ class DNNRank(nn.Module):
         self.fc1 = nn.Linear(embedding_size*2, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
+        self.fc4 = nn.Linear(128, 128)
+        self.out = nn.Linear(128, 1)
 
     def forward(self, uid, iid):
 
@@ -44,7 +48,8 @@ class DNNRank(nn.Module):
         x_ = F.relu(self.fc1(x_))
         x_ = F.relu(self.fc2(x_))
         x_ = F.relu(self.fc3(x_))
-        y = F.sigmoid( self.fc4(x_) )
+        x_ = F.relu(self.fc4(x_))
+        y = F.sigmoid( self.out(x_) )
         return y
 
 class DataGenerator:
@@ -57,6 +62,7 @@ class DataGenerator:
         self.data_count = 0
         self.device = device
         self.train = train
+        self.current_epoch = 0
 
         write_progress = tqdm.tqdm(train)
         for uid, iid, click in write_progress:
@@ -75,15 +81,15 @@ class DataGenerator:
 
         
     def data_generator(self):
-        epoch_num = 0
+        self.current_epoch= 0
         while 1:
             # batch for embeddings.
             user_ids = []
             item_ids = []
             clicks = []
 
-            epoch_num += 1
-            pydev.info('Epoch %d' % epoch_num)
+            self.current_epoch += 1
+            pydev.info('Epoch %d' % self.current_epoch)
             for uid, iid, click  in self.train:
                 user_ids.append(uid)
                 item_ids.append(iid)
@@ -99,23 +105,20 @@ class DataGenerator:
                     clicks = []
 
 if __name__=='__main__':
-    if len(sys.argv)!=3:
-        print >> sys.stderr, 'Usage:\ntrain_dnn.py <datadir> <model>'
-        sys.exit(-1)
+    autoarg = pydev.AutoArg()
+    data_dir = autoarg.option('data', 'data/')
+    model_save_path = autoarg.option('output', 'temp/dnn.pkl')
 
-    TestNum = -1
-    EmbeddingSize = 16
-    EpochCount = 3
-    BatchSize = 1024
+    TestNum = int(autoarg.option('testnum', -1))
+    EmbeddingSize = int(autoarg.option('embed', 16))
+    EpochCount = int(autoarg.option('epoch', 3))
+    BatchSize = int(autoarg.option('batch', 1024))
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
     pydev.info('BatchSize=%d' % BatchSize)
 
     device = torch.device('cuda')
-
-    data_dir = sys.argv[1]
-    model_save_path = sys.argv[2]
 
     train, valid, test = utils.readdata(data_dir, test_num=TestNum)
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize)
@@ -127,11 +130,29 @@ if __name__=='__main__':
     
     generator = data.data_generator()
 
-    test_y = []
-    test_y_ = []
+    def test_validation():
+        y = []
+        y_ = []
+
+        batch_size = 2048
+        for begin in range(0, len(valid)-1, batch_size):
+            output = model.forward(
+                    torch.tensor(map(lambda x:x[0], valid[begin:begin+batch_size])).to(device),
+                    torch.tensor(map(lambda x:x[1], valid[begin:begin+batch_size])).to(device),
+                    )
+            y += map(lambda x:x[2], valid[begin:begin+batch_size])
+            y_ += output.view(-1).tolist()
+        
+        auc = metrics.roc_auc_score(y, y_)
+        pydev.log('Valid AUC: %.3f' % auc)
 
     def fwbp():
+        pre_epoch = data.current_epoch
         user_ids, item_ids, clicks = generator.next()
+        if data.current_epoch > pre_epoch:
+            # epoch complete.
+            # test valid.
+            test_validation()
 
         clicks_ = model.forward(user_ids, item_ids)
         loss = loss_fn(clicks_, clicks)
