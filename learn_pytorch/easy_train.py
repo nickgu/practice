@@ -75,7 +75,7 @@ class SlotIndexCoder:
         fd.write('%s\n' % '\t'.join(self.__slot_index.keys()))
         for slot, index_coder in self.__slot_index.iteritems():
             for idx, value in enumerate(index_coder.tags):
-                fd.write('%s\t%s\t%d' % (slot, value, ))
+                fd.write('%s\t%s\t%d\n' % (slot, value, idx))
 
     def load(self, fd):
         self.__slot_index = {}
@@ -95,15 +95,15 @@ class SlotIndexCoder:
             slot_index.index[key] = len(slot_index.tags)
             slot_index.tags.append(key)
 
-    def __equal__(self, peer):
+    def __eq__(self, peer):
         if self.__slot_index.keys() != peer.__slot_index.keys():
             return False
 
         for slot, index in self.__slot_index.iteritems():
             peer_index = peer.__slot_index[slot]
-            if peer_index.tags != self.tags:
+            if peer_index.tags != index.tags:
                 return False
-            if peer_index.index != self.index:
+            if peer_index.index != index.index:
                 return False
 
         return True
