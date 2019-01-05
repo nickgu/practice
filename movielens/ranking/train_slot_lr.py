@@ -20,7 +20,7 @@ import tqdm
 import numpy as np
 
 class SlotLRRank(nn.Module):
-    def __init__(self, user_count, item_count, user_genres_count, embedding_size):
+    def __init__(self, user_count, item_count, user_genres_count, user_tags_count, embedding_size):
         # Ranking model:
         # input emb_size * 2 (embbag of input, emb of item to predict)
         # fc x 4
@@ -29,20 +29,24 @@ class SlotLRRank(nn.Module):
         pydev.info('user_count=%d' % user_count)
         pydev.info('item_count=%d' % item_count)
         pydev.info('user_genres_count=%d' % user_genres_count)
+        pydev.info('user_tags_count=%d' % user_tags_count)
         pydev.info('embedding=%d' % embedding_size)
 
         self.uid_emb = nn.Embedding(user_count, embedding_size)
         self.iid_emb = nn.Embedding(item_count, embedding_size)
         self.user_genres_emb = nn.EmbeddingBag(user_genres_count, embedding_size, mode='mean')
+        self.user_tags_emb = nn.EmbeddingBag(user_tags_count, embedding_size, mode='mean')
 
         self.lr = nn.Linear(embedding_size*3, 1)
 
-    def forward(self, uid, iid, user_genres, user_genres_offset):
+    def forward(self, uid, iid, user_genres, user_genres_offset, user_tags, user_tags_offset):
         # sum up embeddings.
         user_emb = self.uid_emb(uid)
         item_emb = self.iid_emb(iid)
         user_genres_emb = self.user_genres_emb(user_genres, user_genres_offset)
-        x_ = torch.cat((user_emb, item_emb, user_genres_emb), 1)
+        user_tags_emb = self.user_tags_emb(user_tags, user_tags_offset)
+
+        x_ = torch.cat((user_emb, item_emb, user_genres_emb, user_tags_emb), 1)
         y = F.sigmoid( self.lr(x_) )
         return y
 
@@ -52,7 +56,7 @@ class DataGenerator:
         max_user_id = 0
 
         pydev.info('load movies')
-        self.movies = utils.load_movies('data/ml-20m_all', ignore_tags=True)
+        self.movies = utils.load_movies('data/ml-20m_all', ignore_tags=False)
 
         self.epoch_count = epoch_count
         self.batch_size = batch_size
@@ -61,7 +65,8 @@ class DataGenerator:
         self.data = []
 
         write_progress = tqdm.tqdm(train)
-        self.idx_coder = easy_train.IndexCoder()
+        self.slot_coder = easy_train.SlotIndexCoder()
+        # feature extracting.
         for uid, iid, click in write_progress:
             max_movie_id = max(max_movie_id, iid)
             max_user_id = max(max_user_id, uid)
@@ -72,10 +77,18 @@ class DataGenerator:
             user_genres = []
             for genres in movie.genres:
                 key='%s_%s' % (uid, genres)
-                idx = self.idx_coder.alloc(key)
+                idx = self.slot_coder.alloc('uid_genres', key)
                 user_genres.append( idx )
 
-            self.data.append( (uid, iid, user_genres, click) )
+            user_tags = []
+            for tag_id, tag, score in movie.tags:
+                if score < 0.1:
+                    continue
+                key='%s_%s' % (uid, tag)
+                idx = self.slot_coder.alloc('uid_tag', key)
+                #user_tags.append( idx )
+
+            self.data.append( (uid, iid, user_genres, user_tags, click) )
 
         self.train_iter_count = self.epoch_count * self.data_count / self.batch_size
 
@@ -95,15 +108,22 @@ class DataGenerator:
             item_ids = []
             user_genres_ids = []
             user_genres_offset = []
+
+            user_tags_ids = []
+            user_tags_offset = []
             clicks = []
 
             epoch_num += 1
             pydev.info('Epoch %d' % epoch_num)
-            for uid, iid, user_genres, click in self.data:
+            for uid, iid, user_genres, user_tags, click in self.data:
                 user_ids.append(uid)
                 item_ids.append(iid)
                 user_genres_offset.append( len(user_genres_ids) )
                 user_genres_ids += user_genres
+
+                user_tags_offset.append( len(user_tags_ids) )
+                user_tags_ids += user_tags
+
                 clicks.append(float(click))
 
                 if len(clicks)>=self.batch_size:
@@ -111,6 +131,8 @@ class DataGenerator:
                             torch.tensor(item_ids).to(self.device), 
                             torch.tensor(user_genres_ids).to(self.device), 
                             torch.tensor(user_genres_offset).to(self.device), 
+                            torch.tensor(user_tags_ids).to(self.device), 
+                            torch.tensor(user_tags_offset).to(self.device), 
                             torch.tensor(clicks).to(self.device))
 
                     user_ids = []
@@ -118,6 +140,9 @@ class DataGenerator:
                     clicks = []
                     user_genres_ids = []
                     user_genres_offset = []
+                    user_tags_ids = []
+                    user_tags_offset = []
+
 
 if __name__=='__main__':
     if len(sys.argv)!=3:
@@ -155,17 +180,17 @@ if __name__=='__main__':
     test_y_ = []
 
     def fwbp():
-        user_ids, item_ids, user_genres_ids, user_genres_offset, clicks = generator.next()
+        user_ids, item_ids, user_genres_ids, user_genres_offset, user_tags_ids, user_tags_offset, clicks = generator.next()
 
         #print user_ids.size()
         #print item_ids.size()
         #print user_genres_ids.size()
         #print user_genres_offset.size()
-        clicks_ = model.forward(user_ids, item_ids, user_genres_ids, user_genres_offset)
+        clicks_ = model.forward(user_ids, item_ids, user_genres_ids, user_genres_offset, user_tags_id, user_tags_offset)
         loss = loss_fn(clicks_, clicks)
         loss.backward()
 
-        del user_ids, item_ids, user_genres_ids, user_genres_offset, clicks
+        del user_ids, item_ids, user_genres_ids, user_genres_offset, user_tags_ids, user_tags_offset, clicks
         return loss[0]
 
     pydev.info('Begin training..')
