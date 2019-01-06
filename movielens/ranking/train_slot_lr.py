@@ -146,7 +146,6 @@ if __name__=='__main__':
     train, valid, test = utils.readdata(data_dir, test_num=TestNum)
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize, movie_dir=movie_dir)
 
-    pydev.info('save index (num=%d)' % len(data.idx_coder.tags))
     data.idx_coder.save(file('temp/user_genres.idx', 'w'))
 
     model = SlotLRRank(data.user_count, data.movie_count, len(data.idx_coder.tags), EmbeddingSize).to(device)

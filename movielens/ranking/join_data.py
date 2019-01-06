@@ -21,6 +21,9 @@ class MovieLensRankingFeatureExtractor:
         self.iid = int(iid)
         self.movie = self.movies.get(self.iid, None)
 
+    def save(self, coder_output):
+        self.coder.save(file(coder_output,'w'))
+
     def processes(self):
         return (self.f_uid, self.f_iid, self.f_user_genres, self.f_user_tag)
 
@@ -42,7 +45,7 @@ class MovieLensRankingFeatureExtractor:
     def f_user_tag(self):
         slot = 'u_t'
         lst = []
-        for tid, tag, score in self.movie.tags:
+        for tid, tag, score in self.movie.tags[:15]:
             if score < 0.3:
                 continue
             key='%s_%s' % (self.uid, tag)
@@ -78,6 +81,7 @@ class JoinDataApp(pydev.App):
 
             writer.end_instance()
 
+        extractor.save(coder_output_filename)
         writer.summary()
         
 

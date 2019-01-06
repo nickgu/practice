@@ -56,7 +56,7 @@ def load_movies(path, ignore_tags=False):
     for tagid, tag in pydev.foreach_row(file(path + '/genome-tags.csv'), seperator=','):
         if tagid == 'tagId':
             continue
-        tag_info[tagid] = tag
+        tag_info[tagid] = tag.strip()
     pydev.info('load tags info over.')
 
     # load genome tags info.
@@ -70,6 +70,11 @@ def load_movies(path, ignore_tags=False):
             tag_match_count += 1
         except Exception, e:
             pydev.err(e)
+
+    # sort tags.
+    pydev.info('sort tags..')
+    for movie in movies:
+        movies[movie].tags = sorted(movies[movie].tags, key=lambda x:-x[2])
 
     pydev.info('tag matchs : %d' % tag_match_count)
 
@@ -123,9 +128,44 @@ def measure(predictor, test, debug=False):
     auc = metrics.roc_auc_score(y, y_)
     pydev.log('Test AUC: %.3f' % auc)
     
+class Utils(pydev.InteractiveApp):
+    def __init__(self):
+        pydev.InteractiveApp.__init__(self)
+
+    def load_movie(self, arg):
+        path = 'data/ml-20m'
+        if len(arg)>0:
+            path = arg
+        print path
+        self.movies = load_movies(path)
+
+    def movie(self, arg):
+        mid = int(arg)
+        movie = self.movies.get(mid, None)
+
+        print 'Movie %d:' % (movie.id)
+        print '[[ %s | %s ]]' % (movie.title, movie.year)
+        print movie.genres
+        for tid, tag, score in movie.tags[:20]:
+            print '%s:%.3f' % (tag, score)
+
+    def seek(self, arg):
+        pattern = arg
+        for movie in self.movies.values():
+            if pattern in movie.title.lower():
+                print '%s: %s' % (movie.id, movie.title)
+
+    def load(self):
+        train, valid, test = readdata(sys.argv[1])
+        print len(train)
+        print len(valid)
+        print len(test)
+
+    def help(self):
+        print 'load_movie [<path>]: load movie info into memory.'
+        print 'movie <movie_id> : seek movie by id.'
+        print 'seek <query> : seek movie by pattern.'
 
 if __name__=='__main__':
-    train, valid, test = readdata(sys.argv[1])
-    print len(train)
-    print len(valid)
-    print len(test)
+    ut = Utils()
+    ut.run()
