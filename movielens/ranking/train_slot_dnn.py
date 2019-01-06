@@ -59,7 +59,7 @@ if __name__=='__main__':
     autoarg = pydev.AutoArg()
 
     TestNum = -1
-    EmbeddingSize = int(autoarg.option('emb', 8))
+    EmbeddingSize = int(autoarg.option('emb', 32))
     EpochCount = int(autoarg.option('epoch', 4))
     BatchSize = int(autoarg.option('batch', 10000))
     device_name = autoarg.option('device', 'cuda')
@@ -110,8 +110,11 @@ if __name__=='__main__':
         del x, clicks
         return loss[0]
 
+    def while_condition():
+        return reader.epoch() < EpochCount
+
     pydev.info('Begin training..')
-    easy.pytorch.common_train(fwbp, optimizer, 1000, loss_curve_output=file('log/train_loss.log', 'w'))
+    easy.pytorch.common_train(fwbp, optimizer, -1, while_condition=while_condition, loss_curve_output=file('log/train_loss.log', 'w'))
 
     pydev.info('Saving model..')
     torch.save(model.state_dict(), model_save_path)
