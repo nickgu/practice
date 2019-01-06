@@ -98,7 +98,7 @@ if __name__=='__main__':
         print >> sys.stderr, 'Usage:\ndnn.py <datadir> <model>'
         sys.exit(-1)
 
-    TestNum = -1
+    TestNum = 10000
     EmbeddingSize = 8
     EpochCount = 4
     BatchSize = 10000
@@ -129,6 +129,9 @@ if __name__=='__main__':
         user_ids, item_ids, clicks = generator.next()
 
         clicks_ = model.forward(user_ids, item_ids)
+        #print 'size'
+        #print clicks.size()
+        #print clicks_.size()
         loss = loss_fn(clicks_, clicks)
         loss.backward()
 
