@@ -21,35 +21,37 @@ import tqdm
 import numpy as np
 
 class SlotDnnRank(nn.Module):
-    def __init__(self, slot_info, embedding_size, device):
+    def __init__(self, slot_info, embedding_size):
         # Ranking model:
         # input emb_size * N
-        # fc x 4
         nn.Module.__init__(self)
         
         total_input_length = 0
-        self.emb_bags = []
+        self.emb_bags = nn.ModuleList()
         for slot, slot_feanum in slot_info:
             pydev.info('init embeding bag of %s (%d)' % (slot, slot_feanum))
             self.emb_bags.append( nn.EmbeddingBag(slot_feanum, embedding_size, mode='mean').to(device) )
             total_input_length += embedding_size
 
+        pydev.info('input_length : %d' % total_input_length)
         self.fc1 = nn.Linear(total_input_length, 256)
-        self.fc2 = nn.Linear(256, 128)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, 128)
         self.out = nn.Linear(128, 1)
 
     def forward(self, x):
         # sum up embeddings.
         x_emb = []
-        #print x
         for idx, bag in enumerate(self.emb_bags):
             e = bag(x[idx][0], x[idx][1])
             x_emb.append(e)
 
-        #print x_emb
         x_ = torch.cat(x_emb, 1)
         x_ = F.relu(self.fc1(x_))
         x_ = F.relu(self.fc2(x_))
+        x_ = F.relu(self.fc3(x_))
+        x_ = F.relu(self.fc4(x_))
         y = F.sigmoid( self.out(x_) )
 
         return y
@@ -76,8 +78,11 @@ if __name__=='__main__':
     for slot, slot_feanum in pydev.foreach_row(file(slotinfo_filename),format='si'):
         slot_info.append( (slot, slot_feanum) )
 
-    model = SlotDnnRank(slot_info, EmbeddingSize, device).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.02)
+    #import train_dnn
+    #model = train_dnn.DNNRank(140000, 140000, EmbeddingSize).to(device)
+    model = SlotDnnRank(slot_info, EmbeddingSize).to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
     
     def fwbp():
@@ -108,7 +113,7 @@ if __name__=='__main__':
         loss.backward()
 
         del x, clicks
-        return loss[0]
+        return loss.item()
 
     def while_condition():
         return reader.epoch() < EpochCount

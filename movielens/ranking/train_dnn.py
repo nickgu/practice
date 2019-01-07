@@ -13,8 +13,7 @@ import torch.nn.functional as F
 import pydev
 import utils
 
-sys.path.append('../../learn_pytorch')
-import easy_train
+import easy.pytorch
 
 import tqdm
 import numpy as np
@@ -113,12 +112,13 @@ if __name__=='__main__':
     EmbeddingSize = int(autoarg.option('embed', 16))
     EpochCount = int(autoarg.option('epoch', 3))
     BatchSize = int(autoarg.option('batch', 1024))
+    device_name = autoarg.option('device', 'cuda')
 
     pydev.info('EmbeddingSize=%d' % EmbeddingSize)
     pydev.info('Epoch=%d' % EpochCount)
     pydev.info('BatchSize=%d' % BatchSize)
 
-    device = torch.device('cuda')
+    device = torch.device(device_name)
 
     train, valid, test = utils.readdata(data_dir, test_num=TestNum)
     data = DataGenerator(train, device, epoch_count=EpochCount, batch_size=BatchSize)
@@ -149,20 +149,26 @@ if __name__=='__main__':
     def fwbp():
         pre_epoch = data.current_epoch
         user_ids, item_ids, clicks = generator.next()
+        '''
         if data.current_epoch > pre_epoch:
             # epoch complete.
             # test valid.
             test_validation()
+        '''
 
         clicks_ = model.forward(user_ids, item_ids)
+        print clicks
+        print item_ids
+        print user_ids
+        print clicks_
         loss = loss_fn(clicks_, clicks)
         loss.backward()
 
         del user_ids, item_ids, clicks
-        return loss[0]
+        return loss.item()
 
     pydev.info('Begin training..')
-    easy_train.easy_train(fwbp, optimizer, data.train_iter_count, loss_curve_output=file('log/train_loss.log', 'w'))
+    easy.pytorch.common_train(fwbp, optimizer, data.train_iter_count, loss_curve_output=file('log/train_loss.log', 'w'))
 
     pydev.info('Saving model..')
     torch.save(model.state_dict(), model_save_path)
