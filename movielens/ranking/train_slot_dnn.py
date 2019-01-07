@@ -78,10 +78,7 @@ if __name__=='__main__':
     for slot, slot_feanum in pydev.foreach_row(file(slotinfo_filename),format='si'):
         slot_info.append( (slot, slot_feanum) )
 
-    #import train_dnn
-    #model = train_dnn.DNNRank(140000, 140000, EmbeddingSize).to(device)
     model = SlotDnnRank(slot_info, EmbeddingSize).to(device)
-
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
     
