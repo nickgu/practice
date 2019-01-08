@@ -42,6 +42,46 @@ class ModelTester(pydev.App):
         print 
         pydev.log('Valid AUC: %.3f' % auc)
 
+    def test_ins_data(self, model):
+        input_filename = autoarg.option('test')
+        batch_size = int(autoarg.option('batch', 20000))
+        reader = easy.slot_file.SlotFileReader(input_filename)
+        
+        y = []
+        y_ = []
+        while reader.epoch()<1:
+            labels, slots = reader.next(batch_size)
+            
+            # make pytorch data.
+            clicks = torch.Tensor(labels).to(device)
+            dct = {}
+            for item in slots:
+                for slot, ids in item:
+                    if slot not in dct:
+                        # id_list, offset
+                        dct[slot] = [[], []]
+
+                    lst = dct[slot][0]
+                    idx = dct[slot][1]
+                    idx.append( len(lst) )
+                    lst += ids
+
+            x = []
+            for slot, _ in slot_info:
+                id_list, offset = dct.get(slot, [[], []])
+                emb_pair = torch.tensor(id_list).to(device), torch.tensor(offset).to(device)
+                x.append(emb_pair)
+
+            clicks_ = model.forward(x)
+
+            y += clicks
+            y_ += clicks_
+
+        auc = metrics.roc_auc_score(y, y_)
+        print 
+        pydev.log('Valid AUC: %.3f' % auc)
+
+        
     def lr(self):
         import train_lr
         model = train_lr.LRRank(138494, 131263, 8)
