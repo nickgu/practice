@@ -20,6 +20,8 @@ import utils
 import tqdm
 import numpy as np
 
+import model_tester
+
 class SlotDnnRank(nn.Module):
     def __init__(self, slot_info, embedding_size):
         # Ranking model:
@@ -81,6 +83,8 @@ if __name__=='__main__':
     model = SlotDnnRank(slot_info, EmbeddingSize).to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.BCELoss()
+
+    tester = model_tester.ModelTester()
     
     def fwbp():
         labels, slots = reader.next(BatchSize)
@@ -112,8 +116,12 @@ if __name__=='__main__':
         del x, clicks
         return loss.item()
 
-    def while_condition():
-        return reader.epoch() < EpochCount
+    last_epoch = reader.epoch()
+    def while_condition(iter_num):
+        epoch = reader.epoch()
+        if epoch > last_epoch or (iter_num>0 and iter_num % 200 ==0):
+            tester.test_ins_data(model, slot_info)
+        return epoch < EpochCount
 
     pydev.info('Begin training..')
     easy.pytorch.common_train(fwbp, optimizer, -1, while_condition=while_condition, loss_curve_output=file('log/train_loss.log', 'w'))
