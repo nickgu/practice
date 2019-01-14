@@ -12,6 +12,8 @@ import tqdm
 import sklearn
 from sklearn import metrics
 
+import easy
+
 class ModelTester(pydev.App):
     def __init__(self):
         pydev.App.__init__(self)
@@ -19,6 +21,8 @@ class ModelTester(pydev.App):
         self.debug=True
         self.device = torch.device('cuda')
 
+
+    def load_uid_iid_data(self):
         pydev.info('Begin loading data..')
         # no need to load train.
         # only load 10000 train as test_of_train.
@@ -26,6 +30,7 @@ class ModelTester(pydev.App):
         pydev.info('Load over')
 
     def test_uid_iid_model(self, model):
+        self.load_uid_iid_data()
         y = []
         y_ = []
 
@@ -42,18 +47,20 @@ class ModelTester(pydev.App):
         print 
         pydev.log('Valid AUC: %.3f' % auc)
 
-    def test_ins_data(self, model):
+    def test_ins_data(self, model, slot_info):
+        autoarg = pydev.AutoArg()
         input_filename = autoarg.option('test')
         batch_size = int(autoarg.option('batch', 20000))
         reader = easy.slot_file.SlotFileReader(input_filename)
         
         y = []
         y_ = []
+        reading_count = 0
         while reader.epoch()<1:
             labels, slots = reader.next(batch_size)
             
             # make pytorch data.
-            clicks = torch.Tensor(labels).to(device)
+            clicks = torch.Tensor(labels).to(self.device)
             dct = {}
             for item in slots:
                 for slot, ids in item:
@@ -69,13 +76,16 @@ class ModelTester(pydev.App):
             x = []
             for slot, _ in slot_info:
                 id_list, offset = dct.get(slot, [[], []])
-                emb_pair = torch.tensor(id_list).to(device), torch.tensor(offset).to(device)
+                emb_pair = torch.tensor(id_list).to(self.device), torch.tensor(offset).to(self.device)
                 x.append(emb_pair)
 
             clicks_ = model.forward(x)
 
-            y += clicks
-            y_ += clicks_
+            y += clicks.view(-1).tolist()
+            y_ += clicks_.view(-1).tolist()
+
+            pydev.log13('reading_count : %d' % reading_count)
+            reading_count += 1
 
         auc = metrics.roc_auc_score(y, y_)
         print 
@@ -104,6 +114,24 @@ class ModelTester(pydev.App):
         model.load_state_dict( torch.load(model_path) )
         model.to(self.device)
         self.test_uid_iid_model(model)
+
+    def slot_dnn(self):
+        import train_slot_dnn
+        autoarg = pydev.AutoArg()
+
+        EmbeddingSize = int(autoarg.option('emb', 32))
+        slotinfo_filename = autoarg.option('s')
+        model_path = autoarg.option('m')
+
+        # temp get slot_info.
+        slot_info = []
+        for slot, slot_feanum in pydev.foreach_row(file(slotinfo_filename),format='si'):
+            slot_info.append( (slot, slot_feanum) )
+
+        model = train_slot_dnn.SlotDnnRank(slot_info, EmbeddingSize).to(self.device)
+        model.load_state_dict( torch.load(model_path) )
+
+        self.test_ins_data(model, slot_info)
 
 if __name__=='__main__':
     app = ModelTester()

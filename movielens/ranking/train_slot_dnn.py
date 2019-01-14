@@ -30,7 +30,7 @@ class SlotDnnRank(nn.Module):
         self.emb_bags = nn.ModuleList()
         for slot, slot_feanum in slot_info:
             pydev.info('init embeding bag of %s (%d)' % (slot, slot_feanum))
-            self.emb_bags.append( nn.EmbeddingBag(slot_feanum, embedding_size, mode='mean').to(device) )
+            self.emb_bags.append( nn.EmbeddingBag(slot_feanum, embedding_size, mode='mean') )
             total_input_length += embedding_size
 
         pydev.info('input_length : %d' % total_input_length)
