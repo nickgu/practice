@@ -25,6 +25,27 @@ class MyModel(Model):
     x = self.d1(x)
     return self.d2(x)
 
+
+@tf.function
+def train_step(images, labels):
+    with tf.GradientTape() as tape:
+        predictions = model(images)
+        loss = loss_object(labels, predictions)
+    gradients = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+    train_loss(loss)
+    train_accuracy(labels, predictions)
+
+@tf.function
+def test_step(images, labels):
+    predictions = model(images)
+    t_loss = loss_object(labels, predictions)
+
+    test_loss(t_loss)
+    test_accuracy(labels, predictions)
+
+
 if __name__=='__main__':
     # Model, Loss, Optimizer, Data
 
@@ -34,12 +55,13 @@ if __name__=='__main__':
     print('=== Load data ===')
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     print('=== Load data over ===')
+    print('LenX=%d' % len(x_train))
     x_train, x_test = x_train / 255.0, x_test / 255.0
 
     # Add a channels dimension
     x_train = x_train[..., tf.newaxis]
     x_test = x_test[..., tf.newaxis]
-    
+
     # prepare train and test.
     train_ds = tf.data.Dataset.from_tensor_slices(
                 (x_train, y_train)).shuffle(10000).batch(32)
@@ -61,31 +83,15 @@ if __name__=='__main__':
     test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
 
 
-    @tf.function
-    def train_step(images, labels):
-        with tf.GradientTape() as tape:
-            predictions = model(images)
-            loss = loss_object(labels, predictions)
-        gradients = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
-        train_loss(loss)
-        train_accuracy(labels, predictions)
-
-    @tf.function
-    def test_step(images, labels):
-        predictions = model(images)
-        t_loss = loss_object(labels, predictions)
-
-        test_loss(t_loss)
-        test_accuracy(labels, predictions)
-
     print('=== Ready to train! ===')
-    EPOCHS = 5
+    EPOCHS = 10
     for epoch in range(EPOCHS):
         print('Step1 ...')
-        for idx, (images, labels) in enumerate(train_ds):
-            sys.stdout.write('%c%d/10000' %(13, idx))
+        idx = 0
+        for images, labels in train_ds:
+            sys.stdout.write('%c%d' %(13, idx))
+            idx += 1
+
             train_step(images, labels)
         sys.stdout.write('\n')
 
@@ -98,7 +104,6 @@ if __name__=='__main__':
                              train_accuracy.result()*100,
                              test_loss.result(),
                              test_accuracy.result()*100))
-
 
 
 
