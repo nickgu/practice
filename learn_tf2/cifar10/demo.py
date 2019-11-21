@@ -13,7 +13,8 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPool2D
-from tensorflow.keras import Model
+from tensorflow.keras import Model, models, layers
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 class MyModel(Model):
   def __init__(self):
@@ -101,11 +102,55 @@ if __name__=='__main__':
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
+    # train translation.
+    '''
+    datagen = ImageDataGenerator(
+            featurewise_center=True,
+            featurewise_std_normalization=True,
+            rotation_range=20,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            horizontal_flip=True)
+    datagen.fit(x_train)
+    '''
+
     # prepare train and test.
+    '''
     train_ds = tf.data.Dataset.from_tensor_slices(
                 (x_train, y_train)).shuffle(10000).batch(32)
     test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(32)
+    '''
 
+    '''
+    train_ds = tf.data.Dataset.from_generator(
+                    datagen.flow, args=[x_train, y_train],
+                    output_types=(tf.float32, tf.float32)
+                    ).shuffle(10000).batch(32)
+    test_ds = tf.data.Dataset.from_generator(
+                    datagen.flow, args=[x_test, y_test],
+                    output_types=(tf.float32, tf.float32)
+                    ).batch(32)
+    '''
+
+
+    model = models.Sequential()
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(64, activation='relu'))
+    model.add(layers.Dense(10, activation='softmax'))
+
+    model.compile(optimizer='adam',
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy'])
+
+    history = model.fit(x_train, y_train, epochs=20, 
+            validation_data=(x_test, y_test))
+
+    '''
     # make Model.
     model = MyModel()
 
@@ -146,6 +191,6 @@ if __name__=='__main__':
 
 
 
+    
 
-
-
+    '''
