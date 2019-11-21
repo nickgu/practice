@@ -103,7 +103,6 @@ if __name__=='__main__':
     #x_test = x_test[..., tf.newaxis]
 
     # train translation.
-    '''
     datagen = ImageDataGenerator(
             featurewise_center=True,
             featurewise_std_normalization=True,
@@ -112,7 +111,6 @@ if __name__=='__main__':
             height_shift_range=0.2,
             horizontal_flip=True)
     datagen.fit(x_train)
-    '''
 
     # prepare train and test.
     '''
@@ -147,8 +145,11 @@ if __name__=='__main__':
             loss='sparse_categorical_crossentropy',
             metrics=['accuracy'])
 
-    history = model.fit(x_train, y_train, epochs=20, 
-            validation_data=(x_test, y_test))
+    history = model.fit_generator(
+            datagen.flow(x_train, y_train, batch_size=32), 
+            steps_per_epoch = 50000 / 32, 
+            epochs=20, 
+            validation_data=datagen.flow(x_test, y_test,batch_size=32))
 
     '''
     # make Model.
