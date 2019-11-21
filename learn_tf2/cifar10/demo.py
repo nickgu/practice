@@ -146,10 +146,10 @@ if __name__=='__main__':
             metrics=['accuracy'])
 
     history = model.fit_generator(
-            datagen.flow(x_train, y_train, batch_size=32), 
-            steps_per_epoch = 50000 / 32, 
-            epochs=20, 
-            validation_data=datagen.flow(x_test, y_test,batch_size=32))
+            datagen.flow(x_train, y_train, batch_size=8), 
+            steps_per_epoch = 50000 / 8, 
+            epochs=40, 
+            validation_data=datagen.flow(x_test, y_test,batch_size=8))
 
     '''
     # make Model.
