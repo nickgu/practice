@@ -6,7 +6,7 @@ import pydev
 import nnet_tf
 import load_data
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import sys
 
 
@@ -58,6 +58,9 @@ class Preprocessor:
         return distorted_image, queue_y
 
 if __name__ == '__main__':
+    tf.disable_v2_behavior()
+
+
     model_path = sys.argv[1]
     net = nnet_tf.ConfigNetwork('net.conf', 'cifar10_tf_tutor')
 

@@ -6,6 +6,7 @@
 #from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys
+import datetime
 
 import cPickle as cp
 import numpy as np
@@ -13,8 +14,10 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPool2D
-from tensorflow.keras import Model, models, layers
+from tensorflow.keras import Model, models, layers, callbacks
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+from lsuv_init import LSUVinit 
 
 class MyModel(Model):
   def __init__(self):
@@ -102,24 +105,112 @@ if __name__=='__main__':
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
+
+    logs = log_dir="logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_vgg_like_v5_deepper_lsuv'
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+    '''
+    # v4 deep model, fetch 87% acc
+    model = models.Sequential()
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.AveragePooling2D((2, 2)))
+    model.add(layers.BatchNormalization())
+
+    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
+    model.add(layers.AveragePooling2D((2, 2)))
+    model.add(layers.BatchNormalization())
+
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+
+    model.add(layers.Flatten())
+    model.add(layers.Dropout(0.6))
+    model.add(layers.Dense(256, activation='relu'))
+    model.add(layers.Dense(10, activation='softmax'))
+    '''
+
+    # v5 deep model, refer to david model.
+    model = models.Sequential()
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(48, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(48, (3, 3), activation='relu', padding='same'))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Dropout(0.25))
+
+    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Dropout(0.25))
+
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(layers.GlobalMaxPooling2D())
+    model.add(layers.Dropout(0.25))
+
+    model.add(layers.Flatten())
+    model.add(layers.Dense(500, activation='relu'))
+    model.add(layers.Dropout(0.25))
+    model.add(layers.Dense(10, activation='softmax'))
+
+
+    if len(sys.argv)>=2 and sys.argv[1] == 'load_model':
+        print 'Load model from last save.'
+        model.load_weights('./models/train_save')
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.0001),
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy'])
+
+    batch_size = 128
+
+    #model = LSUVinit(model,x_train[:batch_size,:,:,:]) 
+
+    '''
+    history = model.fit(x_train, y_train,
+            epochs=150, validation_data=(x_test, y_test),
+            batch_size=128,
+            callbacks=[tensorboard_callback])
+    '''
     # train translation.
     datagen = ImageDataGenerator(
-            featurewise_center=True,
-            featurewise_std_normalization=True,
+            #featurewise_center=True,
+            #featurewise_std_normalization=True,
             rotation_range=20,
-            width_shift_range=0.2,
-            height_shift_range=0.2,
+            width_shift_range=0.08,
+            height_shift_range=0.08,
             horizontal_flip=True)
     datagen.fit(x_train)
 
-    # prepare train and test.
+    history = model.fit_generator(
+            datagen.flow(x_train, y_train, batch_size=batch_size), 
+            steps_per_epoch = 50000 / batch_size, 
+            epochs=400, 
+            validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
+            callbacks=[tensorboard_callback])
+
+    model.summary()
+    model.save_weights('./models/train_save')
+
+
     '''
+    # prepare train and test.
     train_ds = tf.data.Dataset.from_tensor_slices(
                 (x_train, y_train)).shuffle(10000).batch(32)
     test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(32)
-    '''
 
-    '''
     train_ds = tf.data.Dataset.from_generator(
                     datagen.flow, args=[x_train, y_train],
                     output_types=(tf.float32, tf.float32)
@@ -128,30 +219,7 @@ if __name__=='__main__':
                     datagen.flow, args=[x_test, y_test],
                     output_types=(tf.float32, tf.float32)
                     ).batch(32)
-    '''
 
-
-    model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)))
-    model.add(layers.MaxPooling2D((2, 2)))
-    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
-    model.add(layers.MaxPooling2D((2, 2)))
-    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
-    model.add(layers.Flatten())
-    model.add(layers.Dense(64, activation='relu'))
-    model.add(layers.Dense(10, activation='softmax'))
-
-    model.compile(optimizer='adam',
-            loss='sparse_categorical_crossentropy',
-            metrics=['accuracy'])
-
-    history = model.fit_generator(
-            datagen.flow(x_train, y_train, batch_size=8), 
-            steps_per_epoch = 50000 / 8, 
-            epochs=40, 
-            validation_data=datagen.flow(x_test, y_test,batch_size=8))
-
-    '''
     # make Model.
     model = MyModel()
 
