@@ -1,7 +1,8 @@
 #code from : https://github.com/ducha-aiki/LSUV-keras/blob/master/lsuv_init.py
 #from __future__ import print_function
 import numpy as np
-from tensorflow.keras.models import Model
+
+from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Dense, Conv2D
 
 
@@ -25,13 +26,13 @@ def get_activations(model, layer, X_batch):
     )
     activations = intermediate_layer_model.predict(X_batch)
     return activations
-
-
 def LSUVinit(model, batch, verbose=True, margin=0.1, max_iter=10):
     # only these layer classes considered for LSUV initialization; add more if needed
     classes_to_consider = (Dense, Conv2D)
 
     needed_variance = 1.0
+
+    model.predict(batch)
 
     layers_inintialized = 0
     for layer in model.layers:
@@ -40,12 +41,14 @@ def LSUVinit(model, batch, verbose=True, margin=0.1, max_iter=10):
         if not isinstance(layer, classes_to_consider):
             continue
         # avoid small layers where activation variance close to zero, esp. for small batches
+        '''
         if np.prod(layer.get_output_shape_at(0)[1:]) < 32:
             if verbose:
                 print(layer.name, 'too small')
             continue
+        '''
         if verbose:
-            print('LSUV initializing', layer.name)
+            print 'LSUV initializing: ', layer.name
 
         layers_inintialized += 1
         weights_and_biases = layer.get_weights()

@@ -106,7 +106,7 @@ if __name__=='__main__':
     #x_test = x_test[..., tf.newaxis]
 
 
-    logs = log_dir="logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_vgg_like_v5_deepper_lsuv'
+    logs = log_dir="logs/test_lsuv/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_test_lsuv'
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     '''
@@ -136,7 +136,7 @@ if __name__=='__main__':
 
     # v5 deep model, refer to david model.
     model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 3)))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(layers.Conv2D(48, (3, 3), activation='relu', padding='same'))
