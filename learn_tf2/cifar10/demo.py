@@ -62,6 +62,57 @@ def test_step(images, labels):
     test_accuracy(labels, predictions)
 
 
+class ConvResLayer(tf.keras.layers.Layer):
+    def __init__(self, kernel_shape, out_channel, shortcut_translation=False):
+        super(ConvResLayer, self).__init__()
+        self.__seq = models.Sequential()
+        self.__seq.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
+        self.__seq.add(layers.BatchNormalization(axis=3))
+        self.__seq.add(layers.ReLU())
+        self.__seq.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
+        self.__seq.add(layers.BatchNormalization(axis=3))
+
+        if shortcut_translation:
+            self.shortcut=models.Sequential()
+            self.shortcut.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
+            self.shortcut.add(layers.BatchNormalization(axis=3))
+        else:
+            self.shortcut=None
+
+    def call(self, x):
+        y = self.__seq(x)
+        if self.shortcut:
+            x = self.shortcut(x)
+        return x + y
+
+def BuildResNet_34():
+    model = models.Sequential()
+    model.add(layers.Conv2D(64, (7, 7), strides=2, activation='relu', padding='same'))
+    model.add(layers.MaxPooling2D(2, 2))
+
+    model.add(ConvResLayer((3, 3), 64, True))
+    model.add(ConvResLayer((3, 3), 64))
+
+    model.add(ConvResLayer((3, 3), 128, True))
+    model.add(ConvResLayer((3, 3), 128))
+
+
+    model.add(layers.Dropout(0.3))
+    model.add(ConvResLayer((3, 3), 256, True))
+    model.add(ConvResLayer((3, 3), 256))
+
+    model.add(layers.Dropout(0.3))
+    model.add(ConvResLayer((3, 3), 512, True))
+    model.add(ConvResLayer((3, 3), 512))
+
+    model.add(layers.Flatten())
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Dense(1000, activation='relu'))
+    model.add(layers.Dense(10, activation='softmax'))
+
+    return model
+
+
 if __name__=='__main__':
     # Model, Loss, Optimizer, Data
 
@@ -71,6 +122,9 @@ if __name__=='__main__':
     #mnist = tf.keras.datasets.mnist
 
     path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+
+    # set to float16
+    #tf.keras.backend.set_floatx('float16')
 
     xs = []
     ys = []
@@ -106,7 +160,7 @@ if __name__=='__main__':
     #x_test = x_test[..., tf.newaxis]
 
 
-    logs = log_dir="logs/test_lsuv/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_test_lsuv'
+    logs = log_dir="logs/resnet/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_r34_v3_block_dropout'
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     '''
@@ -135,6 +189,7 @@ if __name__=='__main__':
     '''
 
     # v5 deep model, refer to david model.
+    '''
     model = models.Sequential()
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 3)))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
@@ -164,7 +219,9 @@ if __name__=='__main__':
     model.add(layers.Dense(500, activation='relu'))
     model.add(layers.Dropout(0.25))
     model.add(layers.Dense(10, activation='softmax'))
+    '''
 
+    model = BuildResNet_34()
 
     if len(sys.argv)>=2 and sys.argv[1] == 'load_model':
         print 'Load model from last save.'
@@ -188,9 +245,9 @@ if __name__=='__main__':
     datagen = ImageDataGenerator(
             #featurewise_center=True,
             #featurewise_std_normalization=True,
-            rotation_range=20,
-            width_shift_range=0.08,
-            height_shift_range=0.08,
+            rotation_range=60,
+            width_shift_range=0.12,
+            height_shift_range=0.12,
             horizontal_flip=True)
     datagen.fit(x_train)
 
