@@ -19,6 +19,8 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 from lsuv_init import LSUVinit 
 
+import models
+
 class MyModel(Model):
   def __init__(self):
     super(MyModel, self).__init__()
@@ -30,8 +32,7 @@ class MyModel(Model):
     self.d1 = Dense(256, activation='relu')
     self.d2 = Dense(256, activation='relu')
     self.d3 = Dense(10, activation='softmax')
-
-  def call(self, x):
+def call(self, x):
     x = self.conv1(x)
     x = self.pool1(x)
     x = self.conv2(x)
@@ -60,57 +61,6 @@ def test_step(images, labels):
 
     test_loss(t_loss)
     test_accuracy(labels, predictions)
-
-
-class ConvResLayer(tf.keras.layers.Layer):
-    def __init__(self, kernel_shape, out_channel, shortcut_translation=False):
-        super(ConvResLayer, self).__init__()
-        self.__seq = models.Sequential()
-        self.__seq.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
-        self.__seq.add(layers.BatchNormalization(axis=3))
-        self.__seq.add(layers.ReLU())
-        self.__seq.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
-        self.__seq.add(layers.BatchNormalization(axis=3))
-
-        if shortcut_translation:
-            self.shortcut=models.Sequential()
-            self.shortcut.add(layers.Conv2D(out_channel, kernel_shape, padding='same'))
-            self.shortcut.add(layers.BatchNormalization(axis=3))
-        else:
-            self.shortcut=None
-
-    def call(self, x):
-        y = self.__seq(x)
-        if self.shortcut:
-            x = self.shortcut(x)
-        return x + y
-
-def BuildResNet_34():
-    model = models.Sequential()
-    model.add(layers.Conv2D(64, (7, 7), strides=2, activation='relu', padding='same'))
-    model.add(layers.MaxPooling2D(2, 2))
-
-    model.add(ConvResLayer((3, 3), 64, True))
-    model.add(ConvResLayer((3, 3), 64))
-
-    model.add(ConvResLayer((3, 3), 128, True))
-    model.add(ConvResLayer((3, 3), 128))
-
-
-    model.add(layers.Dropout(0.3))
-    model.add(ConvResLayer((3, 3), 256, True))
-    model.add(ConvResLayer((3, 3), 256))
-
-    model.add(layers.Dropout(0.3))
-    model.add(ConvResLayer((3, 3), 512, True))
-    model.add(ConvResLayer((3, 3), 512))
-
-    model.add(layers.Flatten())
-    model.add(layers.Dropout(0.5))
-    model.add(layers.Dense(1000, activation='relu'))
-    model.add(layers.Dense(10, activation='softmax'))
-
-    return model
 
 
 if __name__=='__main__':
@@ -159,69 +109,11 @@ if __name__=='__main__':
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
+    model_builder = models.V4_model
+    model = model_builder()
 
-    logs = log_dir="logs/resnet/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_r34_v3_block_dropout'
+    logs = log_dir="logs/models/" + model_builder.__name__ + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-
-    '''
-    # v4 deep model, fetch 87% acc
-    model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
-    model.add(layers.AveragePooling2D((2, 2)))
-    model.add(layers.BatchNormalization())
-
-    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same'))
-    model.add(layers.AveragePooling2D((2, 2)))
-    model.add(layers.BatchNormalization())
-
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-
-    model.add(layers.Flatten())
-    model.add(layers.Dropout(0.6))
-    model.add(layers.Dense(256, activation='relu'))
-    model.add(layers.Dense(10, activation='softmax'))
-    '''
-
-    # v5 deep model, refer to david model.
-    '''
-    model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 3)))
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(48, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(48, (3, 3), activation='relu', padding='same'))
-    model.add(layers.MaxPooling2D((2, 2)))
-    model.add(layers.Dropout(0.25))
-
-    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(80, (3, 3), activation='relu', padding='same'))
-    model.add(layers.MaxPooling2D((2, 2)))
-    model.add(layers.Dropout(0.25))
-
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='same'))
-    model.add(layers.GlobalMaxPooling2D())
-    model.add(layers.Dropout(0.25))
-
-    model.add(layers.Flatten())
-    model.add(layers.Dense(500, activation='relu'))
-    model.add(layers.Dropout(0.25))
-    model.add(layers.Dense(10, activation='softmax'))
-    '''
-
-    model = BuildResNet_34()
 
     if len(sys.argv)>=2 and sys.argv[1] == 'load_model':
         print 'Load model from last save.'
@@ -231,7 +123,7 @@ if __name__=='__main__':
             loss='sparse_categorical_crossentropy',
             metrics=['accuracy'])
 
-    batch_size = 128
+    batch_size = 256
 
     #model = LSUVinit(model,x_train[:batch_size,:,:,:]) 
 
@@ -243,18 +135,18 @@ if __name__=='__main__':
     '''
     # train translation.
     datagen = ImageDataGenerator(
-            #featurewise_center=True,
-            #featurewise_std_normalization=True,
+            featurewise_center=True,
+            featurewise_std_normalization=True,
             rotation_range=60,
-            width_shift_range=0.12,
-            height_shift_range=0.12,
+            width_shift_range=0.15,
+            height_shift_range=0.15,
             horizontal_flip=True)
     datagen.fit(x_train)
 
     history = model.fit_generator(
             datagen.flow(x_train, y_train, batch_size=batch_size), 
             steps_per_epoch = 50000 / batch_size, 
-            epochs=400, 
+            epochs=600, 
             validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
 
