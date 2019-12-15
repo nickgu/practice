@@ -19,8 +19,11 @@ from lsuv_init import LSUVinit
 
 
 def V4_model():
-    # v4 deep model, fetch 87% acc
+    # v4 deep model, fetch 87% acc (batch=64)
+    # VGG-like construction.
     model = models.Sequential()
+    # test step
+
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='same'))
@@ -128,4 +131,45 @@ def BuildResNet_34():
 
     return model
 
+
+class MyModel(Model):
+  def __init__(self):
+    super(MyModel, self).__init__()
+    self.conv1 = Conv2D(16, 3, activation='relu')
+    self.pool1 = MaxPool2D()
+    self.conv2 = Conv2D(32, 3, activation='relu')
+
+    self.flatten = Flatten()
+    self.d1 = Dense(256, activation='relu')
+    self.d2 = Dense(256, activation='relu')
+    self.d3 = Dense(10, activation='softmax')
+def call(self, x):
+    x = self.conv1(x)
+    x = self.pool1(x)
+    x = self.conv2(x)
+
+    x = self.flatten(x)
+    x = self.d1(x)
+    x = self.d2(x)
+    return self.d3(x)
+
+
+@tf.function
+def train_step(images, labels):
+    with tf.GradientTape() as tape:
+        predictions = model(images)
+        loss = loss_object(labels, predictions)
+    gradients = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+    train_loss(loss)
+    train_accuracy(labels, predictions)
+
+@tf.function
+def test_step(images, labels):
+    predictions = model(images)
+    t_loss = loss_object(labels, predictions)
+
+    test_loss(t_loss)
+    test_accuracy(labels, predictions)
 
