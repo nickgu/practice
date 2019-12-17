@@ -80,6 +80,43 @@ def V5_model():
     
     return model
 
+class ConvBn(tf.keras.layers.Layer):
+    def __init__(self, out_channel, kernel_size=3, stride=1, padding='same'):
+        super(ConvResLayer, self).__init__()
+        self.__seq = models.Sequential()
+        self.__seq.add(layers.Conv2D(out_channel, kernel_shape=(kernel_size, kernel_size), padding=padding, stride=stride))
+        self.__seq.add(layers.BatchNormalization(axis=3))
+        self.__seq.add(layers.ReLU())
+
+    def call(self, x):
+        return self.__seq(x)
+
+class ResConvBn(tf.keras.layers.Layer):
+    def __init__(self, stack_count, out_channel):
+        super(ConvResLayer, self).__init__()
+        self.__seq = models.Sequential()
+        for i in range(stack_count):
+            self.__seq.add(ConvBn(out_channel, kernel_size=3))
+
+    def call(self, x):
+        return x + self.__seq(x)
+
+def V6_ResNet9():
+    # according to Top1 in DAWNBenchmark:
+    #   https://github.com/wbaek/torchskeleton/releases/tag/v0.2.1_dawnbench_cifar10_release
+    model = models.Sequential()
+    model.add(ConvBn(64))
+    model.add(ConvBn(128, kernel_size=5, stride=2))
+    model.add(ResConvBn(2, 128))
+    model.add(ConvBn(256, kernel_size=3, stride=1))
+    model.add(layers.MaxPooling2D(2, 2))
+    model.add(ResConvBn(2, 256))
+    model.add(ConvBn(128, kernel_size=3, stride=1, padding='valid'))
+    model.add(layers.AdaptiveMaxPooling2D(1, 1))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(128, activation='relu'))
+    model.add(layers.Dense(10, activation='softmax'))
+    return model
 
     
 class ConvResLayer(tf.keras.layers.Layer):
