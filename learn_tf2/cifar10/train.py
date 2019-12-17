@@ -31,7 +31,8 @@ def prepare_data():
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
-    path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+    #path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+    path='/Users/gusimiu/lab/practice/dataset/cifar-10-batches-py/'
     xs = []
     ys = []
     for i in range(5):
@@ -61,7 +62,7 @@ if __name__=='__main__':
     # Model, Loss, Optimizer, Data
 
     batch_size = 64
-    model_builder = models.V4_model
+    model_builder = models.V6_ResNet9
     model = model_builder()
     x_train, y_train, x_test, y_test = prepare_data()
 
