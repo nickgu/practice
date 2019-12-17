@@ -31,8 +31,8 @@ def prepare_data():
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
-    #path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
-    path='/Users/gusimiu/lab/practice/dataset/cifar-10-batches-py/'
+    path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+    #path='/Users/gusimiu/lab/practice/dataset/cifar-10-batches-py/'
     xs = []
     ys = []
     for i in range(5):
@@ -77,6 +77,7 @@ if __name__=='__main__':
         print 'Load model from last save.'
         model.load_weights('./models/train_save')
 
+    #model.compile(optimizer=tf.keras.optimizers.SGD(lr=0.0001 / batch_size, momentum=0.9),
     model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.0001),
             loss='sparse_categorical_crossentropy',
             metrics=['accuracy'])
@@ -92,7 +93,7 @@ if __name__=='__main__':
     datagen = ImageDataGenerator(
             #featurewise_center=True,
             #featurewise_std_normalization=True,
-            rotation_range=60,
+            rotation_range=40,
             width_shift_range=0.1,
             height_shift_range=0.1,
             horizontal_flip=True)
@@ -101,7 +102,7 @@ if __name__=='__main__':
     history = model.fit_generator(
             datagen.flow(x_train, y_train, batch_size=batch_size), 
             steps_per_epoch = 50000 / batch_size, 
-            epochs=600, 
+            epochs=500, 
             validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
 
