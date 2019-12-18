@@ -104,6 +104,7 @@ class ResConvBn(tf.keras.layers.Layer):
 def V6_ResNet9():
     # according to Top1 in DAWNBenchmark:
     #   https://github.com/wbaek/torchskeleton/releases/tag/v0.2.1_dawnbench_cifar10_release
+    # validation accuracy 89.6%(adam, batchsize=64)
     model = models.Sequential()
     model.add(ConvBn(64))
     model.add(ConvBn(128, kernel_size=5, strides=2))
