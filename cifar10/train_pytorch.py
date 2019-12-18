@@ -80,7 +80,7 @@ if __name__=='__main__':
     train_x = T.tensor(train_x).float() / 256.0
     print train_x.shape
     train_x = train_x.transpose(3,1)
-    print train_x.shape
+    print 'after transpose', train_x.shape
 
     test_x = T.tensor(train_x).float() / 256.0
     print test_x.shape
