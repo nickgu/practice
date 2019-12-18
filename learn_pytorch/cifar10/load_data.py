@@ -11,7 +11,7 @@ import random
 import threading
 
 #cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
-cifar10_dir='/Users/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
+cifar10_dir='/Users/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
 
 
 file_list = map(lambda x:cifar10_dir+x, [
@@ -23,23 +23,27 @@ file_list = map(lambda x:cifar10_dir+x, [
 ])
 
 def load_files(filenames):
-    data_x = []
-    data_y = []
+    xs = []
+    ys =[]
 
     for filename in filenames:
-        m = cp.load(file(filename))
-        for idx, x in enumerate(m['data']):
-            image = pydev.zip_channel(x, 3)
-            image = image.reshape( (32, 32, 3) )
-            data_x.append(image)
-            data_y.append(m['labels'][idx])
+        d = cp.load(file(filename))
+        xs.append( d['data'].reshape(10000, 3, 32, 32) )
+        ys += d['labels']
 
-            sys.stderr.write('%c%d image(s) loaded.' % (13, len(data_x)))
-    sys.stderr.write('\nLoad image over.\n')
+    x = np.concatenate( xs )
+    y = np.array( ys )
+    '''
+    y = np.zeros((len(ys), 10))
+    for idx, l in enumerate(ys):
+        y[idx][l] = 1.
+    print y
+    '''
 
-    data_x = np.array(data_x)
-    data_y = np.array(data_y)
-    return data_x, data_y
+    print 'load data over'
+    print 'x_shape: ', x.shape
+    print 'y_shape: ', y.shape
+    return x, y
 
 def load_one_part():
     return load_files(file_list[:1])
