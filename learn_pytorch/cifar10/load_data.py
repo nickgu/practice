@@ -29,10 +29,16 @@ def load_files(filenames):
     for filename in filenames:
         d = cp.load(file(filename))
         xs.append( d['data'].reshape(10000, 3, 32, 32) )
-        ys.append( np.array( d['labels'] ) )
+        ys += d['labels']
 
     x = np.concatenate( xs )
-    y = np.concatenate( ys )
+    y = np.array( ys )
+    '''
+    y = np.zeros((len(ys), 10))
+    for idx, l in enumerate(ys):
+        y[idx][l] = 1.
+    print y
+    '''
 
     print 'load data over'
     print 'x_shape: ', x.shape
