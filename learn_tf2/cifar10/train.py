@@ -114,7 +114,7 @@ if __name__=='__main__':
             datagen.flow(x_train, y_train, batch_size=batch_size), 
             steps_per_epoch = 50000 / batch_size, 
             epochs=500, 
-            #validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
+            validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
 
     model.summary()
