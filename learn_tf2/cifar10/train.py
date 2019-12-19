@@ -70,14 +70,25 @@ if __name__=='__main__':
             batch_size,
             datetime.datetime.now().strftime("%Y%m%d:%H:%M:%S"))
     print '=== Run Name: %s ===' % run_name 
-    logs = log_dir="logs/models/" + run_name
+    logs = log_dir="logs/lr_test/" + run_name
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     if len(sys.argv)>=2 and sys.argv[1] == 'load_model':
         print 'Load model from last save.'
         model.load_weights('./models/train_save')
 
-    #model.compile(optimizer=tf.keras.optimizers.SGD(lr=0.0001 / batch_size, momentum=0.9),
+    '''
+    # learning rate scheduler.
+    step = tf.Variable(0, trainable=False)
+    boundaries = [50, 200,   800,    2000, 4000, 8000, 10000]
+    values = [0.1, 0.01, 0.005, 0.0005, 0.0001, 5e-4, 1e-4, 1e-5]
+    learning_rate_fn = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
+                boundaries, values)
+    # Later, whenever we perform an optimization step, we pass in the step.
+    learning_rate = learning_rate_fn(step)
+    '''
+
+    #model.compile(optimizer=tf.keras.optimizers.SGD(lr=learning_rate),
     model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.0001),
             loss='sparse_categorical_crossentropy',
             metrics=['accuracy'])
@@ -93,9 +104,9 @@ if __name__=='__main__':
     datagen = ImageDataGenerator(
             #featurewise_center=True,
             #featurewise_std_normalization=True,
-            rotation_range=40,
-            width_shift_range=0.1,
-            height_shift_range=0.1,
+            rotation_range=60,
+            width_shift_range=0.15,
+            height_shift_range=0.15,
             horizontal_flip=True)
     datagen.fit(x_train)
 
@@ -103,7 +114,7 @@ if __name__=='__main__':
             datagen.flow(x_train, y_train, batch_size=batch_size), 
             steps_per_epoch = 50000 / batch_size, 
             epochs=500, 
-            validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
+            #validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
 
     model.summary()
