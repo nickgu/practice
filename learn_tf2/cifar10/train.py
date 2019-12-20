@@ -31,7 +31,8 @@ def prepare_data():
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
-    path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+    path = '/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
+    #path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
     #path='/Users/gusimiu/lab/practice/dataset/cifar-10-batches-py/'
     xs = []
     ys = []

@@ -7,7 +7,7 @@ import load_data
 import pydev
 import sys
 
-import torch as T
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -63,16 +63,19 @@ class Cifar10Network(nn.Module):
         x = self.convs(x)
         # flatten
         x = x.view( x.shape[0], -1 )
-        print x.shape
+        #print x.shape
         y = self.fc(x)
         return y
 
 
-idx = 0
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
+    arg.str_opt('step', 's', 'step count', default='3000')
     opt = arg.init_arg()
+
+    step_size = int(opt.step)
+    print 'step: ', step_size
 
     #train_x, train_y = load_data.load_all_data()
     train_x, train_y = load_data.load_one_part()
@@ -80,10 +83,10 @@ if __name__=='__main__':
 
     # make simple Model.
     
-    train_x = T.tensor(train_x).float() / 256.0
-    train_y = T.tensor(train_y)
-    test_x = T.tensor(test_x).float() / 256.0
-    test_y = T.tensor(test_y)
+    train_x = torch.tensor(train_x).float() / 256.0
+    train_y = torch.tensor(train_y).long()
+    test_x = torch.tensor(test_x).float() / 256.0
+    test_y = torch.tensor(test_y).long()
 
     '''
     print train_x.shape
@@ -103,25 +106,23 @@ if __name__=='__main__':
     sys.path.append('../')
     import easy_train
 
-    optimizer = T.optim.SGD(model.parameters(), lr=0.01)
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     loss_fn = nn.CrossEntropyLoss()
     batch_size = 32
-    n = train_x.shape[0]
-    print n
+    loader_iter = iter(torch.utils.data.DataLoader(zip(train_x, train_y), batch_size = batch_size))
 
     def forward_and_backward():
-        global idx
-        x = train_x[idx:idx+batch_size]
-        y = train_y[idx:idx+batch_size].type(T.LongTensor)
-
-        idx = (idx + batch_size) % n
+        x, y = loader_iter.next()
 
         y_ = model.forward(x)
         loss = loss_fn(y_, y)
         loss.backward()
         return loss.item() / batch_size
 
-    easy_train.easy_train(forward_and_backward, optimizer, 100)
+    easy_train.easy_train(forward_and_backward, optimizer, step_size)
+
+    easy_train.easy_test(model, test_x, test_y)
 
 
 

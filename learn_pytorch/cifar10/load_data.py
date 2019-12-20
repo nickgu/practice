@@ -6,12 +6,12 @@ import cPickle as cp
 import numpy as np
 import pydev
 import sys
-import tensorflow as tf
 import random
 import threading
 
-#cifar10_dir='/home/nickgu/lab/datasets/cifar10/cifar-10-batches-py/'
-cifar10_dir='/Users/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
+cifar10_dir='/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
+#cifar10_dir='/home/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
+#cifar10_dir='/Users/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
 
 
 file_list = map(lambda x:cifar10_dir+x, [

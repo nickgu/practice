@@ -131,6 +131,7 @@ def easy_train(forward_and_backward_fn, optimizer, iteration_count, loss_curve_o
             acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
             if loss_curve_output:
                 print >> loss_curve_output, '%d,%.3f,%.3f' % (iter_num, acc_loss, cur_loss)
+            
             process_bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
                                         (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
 
