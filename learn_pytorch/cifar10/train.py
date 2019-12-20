@@ -123,6 +123,7 @@ if __name__=='__main__':
     '''
 
     easy_train.epoch_train(train_x, train_y, model, optimizer, loss_fn, 10)
+    print 'train over'
     easy_train.easy_test(model, test_x, test_y)
 
 
