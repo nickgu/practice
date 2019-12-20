@@ -112,6 +112,7 @@ if __name__=='__main__':
     batch_size = 32
     loader_iter = iter(torch.utils.data.DataLoader(zip(train_x, train_y), batch_size = batch_size))
 
+    '''
     def forward_and_backward():
         x, y = loader_iter.next()
 
@@ -119,9 +120,9 @@ if __name__=='__main__':
         loss = loss_fn(y_, y)
         loss.backward()
         return loss.item() / batch_size
+    '''
 
-    easy_train.easy_train(forward_and_backward, optimizer, step_size)
-
+    easy_train.epoch_train(train_x, train_y, model, optimizer, loss_fn, 10)
     easy_train.easy_test(model, test_x, test_y)
 
 
