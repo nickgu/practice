@@ -124,7 +124,7 @@ def epoch_train(train_x, train_y, model, optimizer, loss_fn, epoch, batch_size=3
         acc_loss = 1.0
         for e in range(epoch):
             print 'Epoch %d:' % e
-            dl = torch.utils.data.DataLoader(zip(train_x, train_y), shuffle=True, batch_size=batch_size, pin_memory=True)
+            dl = torch.utils.data.DataLoader(zip(train_x, train_y), shuffle=True, batch_size=batch_size, pin_memory=False)
             bar = tqdm.tqdm(dl)
             for x, y in bar:
                 optimizer.zero_grad()
