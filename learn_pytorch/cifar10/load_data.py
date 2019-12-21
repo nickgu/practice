@@ -9,8 +9,8 @@ import sys
 import random
 import threading
 
-cifar10_dir='/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
-#cifar10_dir='/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
+#cifar10_dir='/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+cifar10_dir='/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
 #cifar10_dir='/home/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
 #cifar10_dir='/Users/gusimiu/lab/datasets/cifar10/cifar-10-batches-py/'
 

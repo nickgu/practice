@@ -119,14 +119,17 @@ def easy_auc(pred, y, reorder=True):
     print >> sys.stderr, pydev.ColorString.yellow(' >>> EASY_AUC_TEST: %.4f (%d items) <<<' % (auc, len(pred)))
     return auc
 
-def epoch_train(train_x, train_y, model, optimizer, loss_fn, epoch, batch_size=32):
+def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=None):
     try:
         acc_loss = 1.0
         for e in range(epoch):
             print 'Epoch %d:' % e
-            dl = torch.utils.data.DataLoader(zip(train_x, train_y), shuffle=True, batch_size=batch_size, pin_memory=False)
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=False)
             bar = tqdm.tqdm(dl)
             for x, y in bar:
+                if device:
+                    x = x.to(device)
+                    y = y.to(device)
                 optimizer.zero_grad()
 
                 y_ = model(x)
@@ -181,6 +184,33 @@ def easy_test(model, x, y):
     hit = y.eq(y_).sum()
     total = len(y)
     print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
+
+def epoch_test(data, model, device=None):
+    # easy test for multiclass output.
+    # the net may design like this:
+    #
+    #   x_ = ...
+    #   x_ = ...
+    #   y_ = self.fc(x_)
+    #   loss = torch.nn.CrossEntropy(y_, y)
+    #
+    #   max(1) : max dim at dim-1
+    #   [1] : get dim.
+    dl = torch.utils.data.DataLoader(data, batch_size=32)
+    total = 0
+    hit = 0
+    for x, y in dl:
+        if device:
+            x = x.to(device)
+            y = y.to(device)
+
+        y_ = model(x).max(1)[1]
+        h = y.eq(y_).sum()
+        hit += h
+        total += len(y)
+
+    print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
+
 
 if __name__=='__main__':
     # test code.
