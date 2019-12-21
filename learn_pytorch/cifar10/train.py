@@ -9,68 +9,10 @@ import sys
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
 import torchvision
 from torchvision.transforms import *
 
-class Conv2DPool(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, pooling_kernel, stride=1, padding=0):
-        nn.Module.__init__(self)
-        
-        self.conv = nn.Conv2d(in_channel, out_channel, kernel_size, stride=stride, padding=padding)
-        self.pool_kernel = pooling_kernel
-
-    def forward(self, input):
-        x = input
-        x = self.conv(x)
-        x = F.max_pool2d(x, self.pool_kernel)
-        return x
-
-'''
-class FCNetworkStack(nn.Module):
-    def __init__(self, stack_width, active=F.relu):
-        nn.Module.__init__(self)
-        
-        self.layers = []
-        self.active = active
-        for idx in range(len(stack_width)-1):
-            n_in = stack_width[idx]
-            n_out = stack_width[idx+1]
-            
-            layer = nn.Linear(n_in, n_out)
-            self.layers.append(layer)
-
-    def forward(self, input):
-        for l in self.layers:
-            input = l(input)
-            input = self.active(input)
-            #print input
-        return input
-'''
-
-class Cifar10Network(nn.Module):
-    def __init__(self):
-        nn.Module.__init__(self)
-        
-        self.convs = nn.Sequential(
-            Conv2DPool(3, 64, [5,5], [2,2], padding=2),
-            Conv2DPool(64, 32, [3,3], [2,2], padding=1),
-            Conv2DPool(32, 32, [3,3], [2,2], padding=1)
-            )
-
-        self.fc = nn.Linear(512, 10)
-
-    def forward(self, input):
-        x = input
-        x = self.convs(x)
-        # flatten
-        x = x.view( x.shape[0], -1 )
-        #print x.shape
-        y = self.fc(x)
-        return y
-
-
+import models
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
@@ -99,7 +41,9 @@ if __name__=='__main__':
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=transform_ops)
 
     # train phase.
-    model = Cifar10Network()
+    #model = models.SimpleConvNet()
+    model = models.Stack5ConvNet()
+
 
     sys.path.append('../')
     import easy_train
@@ -107,11 +51,11 @@ if __name__=='__main__':
     cuda = torch.device('cuda')     # Default CUDA device
     model.to(cuda)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     loss_fn = nn.CrossEntropyLoss()
 
-    easy_train.epoch_train(train, model, optimizer, batch_size=batch_size,
-            loss_fn, epoch, device=cuda, validation=test, validation_epoch=5)
+    easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
+            batch_size=batch_size, device=cuda, validation=test, validation_epoch=5)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'
