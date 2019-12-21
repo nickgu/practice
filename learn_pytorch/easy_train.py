@@ -119,34 +119,6 @@ def easy_auc(pred, y, reorder=True):
     print >> sys.stderr, pydev.ColorString.yellow(' >>> EASY_AUC_TEST: %.4f (%d items) <<<' % (auc, len(pred)))
     return auc
 
-def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=None):
-    try:
-        acc_loss = 1.0
-        for e in range(epoch):
-            print 'Epoch %d:' % e
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=False)
-            bar = tqdm.tqdm(dl)
-            for x, y in bar:
-                if device:
-                    x = x.to(device)
-                    y = y.to(device)
-                optimizer.zero_grad()
-
-                y_ = model(x)
-                loss = loss_fn(y_, y)
-                cur_loss = loss / len(x)
-                loss.backward()
-                optimizer.step()
-
-
-                acc_loss = acc_loss * 0.99 + 0.01 * cur_loss
-                bar.set_description("Loss:%0.3f, AccLoss:%.3f, lr: %0.6f" %
-                                            (cur_loss, acc_loss, optimizer.param_groups[0]['lr']))
-
-    except Exception, e:
-        pydev.err(e)
-        pydev.err('Training Exception(may be interrupted by control.)')
-
 def easy_train(forward_and_backward_fn, optimizer, iteration_count, loss_curve_output=None):
     process_bar = tqdm.tqdm(range(int(iteration_count)))
     acc_loss = 1.0
@@ -210,6 +182,37 @@ def epoch_test(data, model, device=None):
         total += len(y)
 
     print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
+
+def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10):
+    try:
+        loss_sum = 0
+        count = 0
+        for e in range(epoch):
+            print 'Epoch %d:' % e
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=False)
+            bar = tqdm.tqdm(dl)
+            for x, y in bar:
+                if device:
+                    x = x.to(device)
+                    y = y.to(device)
+                optimizer.zero_grad()
+
+                y_ = model(x)
+                loss = loss_fn(y_, y)
+                cur_loss = loss
+                loss.backward()
+                optimizer.step()
+
+                loss_sum += cur_loss
+                count += len(x)
+                bar.set_description("Loss:%.3f " % (loss_sum / count))
+
+            if validation and (e+1)%validation_epoch==0:
+                epoch_test(validation, model, device)
+
+    except Exception, e:
+        pydev.err(e)
+        pydev.err('Training Exception(may be interrupted by control.)')
 
 
 if __name__=='__main__':

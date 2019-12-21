@@ -59,7 +59,7 @@ class Cifar10Network(nn.Module):
             Conv2DPool(32, 32, [3,3], [2,2], padding=1)
             )
 
-        self.fc = nn.Linear(288, 10)
+        self.fc = nn.Linear(512, 10)
 
     def forward(self, input):
         x = input
@@ -74,6 +74,7 @@ class Cifar10Network(nn.Module):
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
+    arg.str_opt('batch', 'b', 'batch size', default='32')
     arg.str_opt('step', 's', 'step count', default='3000')
     arg.str_opt('epoch', 'e', 'epoch count', default='200')
     opt = arg.init_arg()
@@ -84,34 +85,18 @@ if __name__=='__main__':
     epoch = int(opt.epoch)
     print 'epoch: ', epoch
 
-    #train_x, train_y = load_data.load_all_data()
-    #train_x, train_y = load_data.load_one_part()
-    #test_x, test_y = load_data.load_test()
+    batch_size = int(opt.batch)
+    print 'batch_size: ', batch_size
 
     # make simple Model.
 
     transform_ops = Compose([
-        RandomCrop(24), 
+        RandomCrop(32, padding=2), 
+        RandomHorizontalFlip(),
+        RandomRotation(30),
         ToTensor()])
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=transform_ops)
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=transform_ops)
-
-    '''
-    train_x = torch.tensor(train_x).float() / 256.0
-    train_y = torch.tensor(train_y).long()
-    test_x = torch.tensor(test_x).float() / 256.0
-    test_y = torch.tensor(test_y).long()
-
-    print train_x.shape
-    train_x = train_x.transpose(3,1)
-    print 'after transpose', train_x.shape
-    '''
-
-    '''
-    print test_x.shape
-    test_x = test_x.transpose(3,1)
-    print test_x.shape
-    '''
 
     # train phase.
     model = Cifar10Network()
@@ -121,28 +106,12 @@ if __name__=='__main__':
 
     cuda = torch.device('cuda')     # Default CUDA device
     model.to(cuda)
-    '''
-    train_x = train_x.to(cuda)
-    train_y = train_y.to(cuda)
-    test_x = test_x.to(cuda)
-    test_y = test_y.to(cuda)
-    '''
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_fn = nn.CrossEntropyLoss()
-    batch_size = 32
 
-    '''
-    def forward_and_backward():
-        x, y = loader_iter.next()
-
-        y_ = model.forward(x)
-        loss = loss_fn(y_, y)
-        loss.backward()
-        return loss.item() / batch_size
-    '''
-
-    easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, device=cuda)
+    easy_train.epoch_train(train, model, optimizer, batch_size=batch_size,
+            loss_fn, epoch, device=cuda, validation=test, validation_epoch=5)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'
