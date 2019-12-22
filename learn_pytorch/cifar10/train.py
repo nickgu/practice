@@ -16,9 +16,9 @@ import models
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
-    arg.str_opt('batch', 'b', 'batch size', default='32')
+    arg.str_opt('batch', 'b', 'batch size', default='512')
+    arg.str_opt('epoch', 'e', 'epoch count', default='100')
     arg.str_opt('step', 's', 'step count', default='3000')
-    arg.str_opt('epoch', 'e', 'epoch count', default='200')
     opt = arg.init_arg()
 
     step_size = int(opt.step)
@@ -35,7 +35,7 @@ if __name__=='__main__':
     transform_ops = Compose([
         RandomCrop(32, padding=2), 
         RandomHorizontalFlip(),
-        RandomRotation(30),
+        #RandomRotation(30),
         ToTensor()])
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=transform_ops)
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=transform_ops)
@@ -51,11 +51,11 @@ if __name__=='__main__':
     cuda = torch.device('cuda')     # Default CUDA device
     model.to(cuda)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_fn = nn.CrossEntropyLoss()
 
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
-            batch_size=batch_size, device=cuda, validation=test, validation_epoch=5)
+            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'

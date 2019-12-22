@@ -96,28 +96,39 @@ if __name__=='__main__':
             metrics=['accuracy'])
     #model = LSUVinit(model,x_train[:batch_size,:,:,:]) 
 
+    '''
     y_test = np.array(y_test)
+    #train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(10000).batch(batch_size)
     model.fit(x_train, y_train,
             epochs=150,
             validation_data=[x_test, y_test],
-            batch_size=128)
+            batch_size=512,
+            callbacks=[tensorboard_callback])
+    '''
+
+    # train translation.
+    datagen = ImageDataGenerator(
+            #featurewise_center=True,
+            #featurewise_std_normalization=True,
+            rotation_range=60,
+            width_shift_range=0.15,
+            height_shift_range=0.15,
+            horizontal_flip=True)
+    datagen.fit(x_train)
+    model.fit(
+            #train_ds, 
+            datagen.flow(x_train, y_train, batch_size=batch_size), 
+            epochs=500, 
+            validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
 
     '''
-    # train translation.
-    datagen = ImageDataGenerator()
-            #featurewise_center=True,
-            #featurewise_std_normalization=True,
-            #rotation_range=60,
-            #width_shift_range=0.15,
-            #height_shift_range=0.15,
-            #horizontal_flip=True)
-    datagen.fit(x_train)
-
     model.fit_generator(
+            #train_ds,
             datagen.flow(x_train, y_train, batch_size=batch_size), 
-            steps_per_epoch = 50000 / batch_size, 
+            #steps_per_epoch = 50000 / batch_size, 
             epochs=500, 
+            #workers=4,
             validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
     '''
