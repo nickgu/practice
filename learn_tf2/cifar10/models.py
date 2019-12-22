@@ -120,6 +120,25 @@ def V6_ResNet9():
     model.add(layers.Dense(10, activation='softmax'))
     return model
 
+def V7_ResNet9():
+    # according to Top1 in DAWNBenchmark:
+    #   https://github.com/wbaek/torchskeleton/releases/tag/v0.2.1_dawnbench_cifar10_release
+    # validation accuracy 89.6%(adam, batchsize=64)
+    model = models.Sequential()
+    model.add(ConvBn(64))
+    model.add(ConvBn(128, kernel_size=5, strides=2))
+    model.add(ResConvBn(2, 128))
+    model.add(ConvBn(256, kernel_size=3, strides=1))
+    model.add(layers.MaxPooling2D(2, 2))
+    model.add(ResConvBn(2, 256))
+    model.add(ConvBn(128, kernel_size=3, strides=1, padding='valid'))
+    #model.add(layers.AdaptiveMaxPooling2D(1, 1)) # adaptive pooling from Pytorch.
+    model.add(layers.MaxPooling2D(2))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(10, activation='softmax'))
+    return model
+
+
     
 class ConvResLayer(tf.keras.layers.Layer):
     def __init__(self, kernel_shape, out_channel, shortcut_translation=False):

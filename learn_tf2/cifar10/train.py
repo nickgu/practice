@@ -31,8 +31,8 @@ def prepare_data():
     #x_train = x_train[..., tf.newaxis]
     #x_test = x_test[..., tf.newaxis]
 
-    path = '/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
-    #path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
+    #path = '/home/psdz/lab/practice/dataset/cifar-10-batches-py/'
+    path = '/home/nickgu/lab/practice/dataset/cifar-10-batches-py/'
     #path='/Users/gusimiu/lab/practice/dataset/cifar-10-batches-py/'
     xs = []
     ys = []
@@ -61,9 +61,10 @@ def prepare_data():
 
 if __name__=='__main__':
     # Model, Loss, Optimizer, Data
+    log_dir = 'models'
 
     batch_size = 64
-    model_builder = models.V6_ResNet9
+    model_builder = models.V7_ResNet9
     model = model_builder()
     x_train, y_train, x_test, y_test = prepare_data()
 
@@ -71,7 +72,7 @@ if __name__=='__main__':
             batch_size,
             datetime.datetime.now().strftime("%Y%m%d:%H:%M:%S"))
     print '=== Run Name: %s ===' % run_name 
-    logs = log_dir="logs/lr_test/" + run_name
+    logs = log_dir = 'logs/%s/%s' % (log_dir, run_name)
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     if len(sys.argv)>=2 and sys.argv[1] == 'load_model':
@@ -95,28 +96,31 @@ if __name__=='__main__':
             metrics=['accuracy'])
     #model = LSUVinit(model,x_train[:batch_size,:,:,:]) 
 
-    '''
-    history = model.fit(x_train, y_train,
-            epochs=150, validation_data=(x_test, y_test),
-            batch_size=128,
+    y_test = np.array(y_test)
+    model.fit(x_train, y_train,
+            epochs=150,
+            validation_data=[x_test, y_test],
+            batch_size=128)
             callbacks=[tensorboard_callback])
+
     '''
     # train translation.
-    datagen = ImageDataGenerator(
+    datagen = ImageDataGenerator()
             #featurewise_center=True,
             #featurewise_std_normalization=True,
-            rotation_range=60,
-            width_shift_range=0.15,
-            height_shift_range=0.15,
-            horizontal_flip=True)
+            #rotation_range=60,
+            #width_shift_range=0.15,
+            #height_shift_range=0.15,
+            #horizontal_flip=True)
     datagen.fit(x_train)
 
-    history = model.fit_generator(
+    model.fit_generator(
             datagen.flow(x_train, y_train, batch_size=batch_size), 
             steps_per_epoch = 50000 / batch_size, 
             epochs=500, 
             validation_data=datagen.flow(x_test, y_test,batch_size=batch_size),
             callbacks=[tensorboard_callback])
+    '''
 
     model.summary()
     model.save_weights('./models/train_save')
