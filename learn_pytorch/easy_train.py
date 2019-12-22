@@ -168,7 +168,7 @@ def epoch_test(data, model, device=None):
     #
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
-    dl = torch.utils.data.DataLoader(data, batch_size=32)
+    dl = torch.utils.data.DataLoader(data, batch_size=512)
     total = 0
     hit = 0
     for x, y in dl:
@@ -185,27 +185,34 @@ def epoch_test(data, model, device=None):
 
 def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10):
     try:
-        loss_sum = 0
-        count = 0
         for e in range(epoch):
             print 'Epoch %d:' % e
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=False)
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True)
             bar = tqdm.tqdm(dl)
+
+            loss_sum = 0
+            correct_all = 0
+            count = 0
+
             for x, y in bar:
+                optimizer.zero_grad()
                 if device:
                     x = x.to(device)
                     y = y.to(device)
-                optimizer.zero_grad()
 
                 y_ = model(x)
                 loss = loss_fn(y_, y)
+                correct = y.eq(y_.max(1)[1]).sum()
+                #correct = 0
+
                 cur_loss = loss
                 loss.backward()
                 optimizer.step()
 
                 loss_sum += cur_loss
+                correct_all += correct
                 count += len(x)
-                bar.set_description("Loss:%.3f " % (loss_sum / count))
+                bar.set_description("Loss:%.5f Acc:%.5f" % (loss_sum / count, correct_all*1. / count))
 
             if validation and (e+1)%validation_epoch==0:
                 epoch_test(validation, model, device)

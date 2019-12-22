@@ -53,6 +53,7 @@ if __name__=='__main__':
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_fn = nn.CrossEntropyLoss()
+    #loss_fn = nn.NLLLoss()
 
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
             batch_size=batch_size, device=cuda, validation=test, validation_epoch=3)
