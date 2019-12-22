@@ -42,8 +42,8 @@ if __name__=='__main__':
 
     # train phase.
     #model = models.SimpleConvNet()
-    model = models.Stack5ConvNet()
-
+    #model = models.Stack5ConvNet()
+    model = models.Res9Net()
 
     sys.path.append('../')
     import easy_train
