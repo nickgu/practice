@@ -74,7 +74,7 @@ class TempModel(nn.Module):
                 ResConvBlock(512),
                 nn.MaxPool2d(4)
                 )
-        self.fc = nn.Linear(512, 10)
+        self.fc = nn.Linear(512, 10, bias=False)
 
     def forward(self, input):
         x = input
@@ -125,7 +125,8 @@ if __name__=='__main__':
         ])
 
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=train_transform)
-    test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
+    test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=train_transform)
+    #test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
 
     # train phase.
     #model = models.SimpleConvNet()
@@ -141,6 +142,7 @@ if __name__=='__main__':
     model.to(cuda)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=5e-4*batch_size, nesterov=True)
     '''
     optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9, weight_decay=5e-4*batch_size, nesterov=True)
     def lr_scheduler(e):

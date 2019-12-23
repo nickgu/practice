@@ -187,6 +187,10 @@ def epoch_train(train, model, optimizer,
         loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10,
         scheduler=None):
     try:
+        '''
+        import torchvision
+        T = torchvision.transforms.ToPILImage()
+        '''
         for e in range(epoch):
             print 'Epoch %d:' % e
             # DropLast??
@@ -199,7 +203,15 @@ def epoch_train(train, model, optimizer,
 
             #print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
                 
+            #first = True
             for x, y in bar:
+                '''
+                if first:
+                    img = T(x[0])
+                    img.show()
+                    first = False
+                '''
+
                 optimizer.zero_grad()
                 if device:
                     x = x.to(device)
