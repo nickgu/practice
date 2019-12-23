@@ -183,17 +183,22 @@ def epoch_test(data, model, device=None):
 
     print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
 
-def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10):
+def epoch_train(train, model, optimizer, 
+        loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10,
+        scheduler=None):
     try:
         for e in range(epoch):
             print 'Epoch %d:' % e
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True)
+            # DropLast??
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True, drop_last=True)
             bar = tqdm.tqdm(dl)
 
             loss_sum = 0
             correct_all = 0
             count = 0
 
+            #print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
+                
             for x, y in bar:
                 optimizer.zero_grad()
                 if device:
@@ -208,11 +213,15 @@ def epoch_train(train, model, optimizer, loss_fn, epoch, batch_size=32, device=N
                 cur_loss = loss
                 loss.backward()
                 optimizer.step()
+                
 
                 loss_sum += cur_loss
                 correct_all += correct
                 count += len(x)
                 bar.set_description("Loss:%.5f Acc:%.5f" % (loss_sum / count, correct_all*1. / count))
+
+            if scheduler:
+                scheduler.step()
 
             if validation and (e+1)%validation_epoch==0:
                 epoch_test(validation, model, device)

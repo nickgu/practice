@@ -6,6 +6,7 @@
 import load_data
 import pydev
 import sys
+import random
 
 import torch
 import torch.nn as nn
@@ -17,20 +18,24 @@ from torchvision.transforms import *
 
 
 class ConvBNReluPool(nn.Module):
-    def __init__(self, in_chan, out_chan, pool=True):
+    def __init__(self, in_chan, out_chan, pool=False):
         nn.Module.__init__(self)
-        self.conv = nn.Sequential(
-                nn.Conv2d(in_chan, out_chan, [3,3], padding=1),
-                nn.BatchNorm2d(out_chan)
-                )
-        self.maxpool = pool
+        if pool:
+            self.conv = nn.Sequential(
+                    nn.Conv2d(in_chan, out_chan, [3,3], padding=1, bias=False),
+                    nn.BatchNorm2d(out_chan),
+                    nn.MaxPool2d(2)
+                    )
+        else:
+            self.conv = nn.Sequential(
+                    nn.Conv2d(in_chan, out_chan, [3,3], padding=1, bias=False),
+                    nn.BatchNorm2d(out_chan)
+                    )
 
     def forward(self, input):
         x = input
         x = self.conv(x)
         x = F.relu(x)
-        if self.maxpool:
-            x = F.max_pool2d(x, [2,2])
         return x
 
 
@@ -39,11 +44,11 @@ class ResConvBlock(nn.Module):
         nn.Module.__init__(self)
 
         self.conv1 = nn.Sequential(
-                nn.Conv2d(chan, chan, [3,3], padding=1),
+                nn.Conv2d(chan, chan, [3,3], padding=1, bias=False),
                 nn.BatchNorm2d(chan)
                 )
         self.conv2 = nn.Sequential(
-                nn.Conv2d(chan, chan, [3,3], padding=1),
+                nn.Conv2d(chan, chan, [3,3], padding=1, bias=False),
                 nn.BatchNorm2d(chan)
                 )
 
@@ -65,17 +70,29 @@ class TempModel(nn.Module):
                 ConvBNReluPool(64, 128, pool=True),
                 ResConvBlock(128),
                 ConvBNReluPool(128, 256, pool=True),
-                ConvBNReluPool(256, 512),
-                ResConvBlock(512)
+                ConvBNReluPool(256, 512, pool=True),
+                ResConvBlock(512),
+                nn.MaxPool2d(4)
                 )
-        self.fc = nn.Linear(2048, 10)
+        self.fc = nn.Linear(512, 10)
 
     def forward(self, input):
         x = input
         x = self.net(x)
-        x = x.view((-1,2048))
+        x = x.view((-1,512))
         x = self.fc(x)
         return x
+
+class Cutout:
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, x):
+        bx = random.randint(0, x.shape[0]-1)
+        by = random.randint(0, x.shape[1]-1)
+        x[..., bx:bx+self.size, by:by+self.size ] = 0.
+        return x
+        
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
@@ -96,10 +113,10 @@ if __name__=='__main__':
     # make simple Model.
 
     train_transform = Compose([
-        RandomCrop(32, padding=2), 
+        RandomCrop(32, padding=4), 
         RandomHorizontalFlip(),
-        #RandomRotation(30),
         ToTensor(),
+        Cutout(8),
         Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70))
         ])
     test_transform = Compose([
@@ -124,11 +141,23 @@ if __name__=='__main__':
     model.to(cuda)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    '''
+    optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9, weight_decay=5e-4*batch_size, nesterov=True)
+    def lr_scheduler(e):
+        print e
+        if e < 5:
+            return (e+1) / 5. * 0.4
+        else:
+            return 0.4 - (e-5.) / (epoch-5.) * 0.4
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_scheduler)
+    '''
+
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
 
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
-            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3)
+            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3, 
+            scheduler=None)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'
