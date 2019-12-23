@@ -125,8 +125,8 @@ if __name__=='__main__':
         ])
 
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=train_transform)
-    test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=train_transform)
-    #test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
+    #test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=train_transform)
+    test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
 
     # train phase.
     #model = models.SimpleConvNet()
