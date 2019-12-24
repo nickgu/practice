@@ -157,7 +157,7 @@ def easy_test(model, x, y):
     total = len(y)
     print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
 
-def epoch_test(data, model, device=None):
+def epoch_test(data, model, device=None, precision_threshold=None, current_best=0):
     # easy test for multiclass output.
     # the net may design like this:
     #
@@ -181,7 +181,16 @@ def epoch_test(data, model, device=None):
         hit += h
         total += len(y)
 
-    print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
+    precision = hit * 100. / total
+    if current_best < precision:
+        current_best = precision
+
+    if precision_threshold is not None and precision >= precision_threshold:
+        print >> sys.stderr, pydev.ColorString.yellow(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
+    else:
+        print >> sys.stderr, pydev.ColorString.red(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
+
+    return precision
 
 def epoch_train(train, model, optimizer, 
         loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10,
@@ -191,17 +200,18 @@ def epoch_train(train, model, optimizer,
         import torchvision
         T = torchvision.transforms.ToPILImage()
         '''
+        best = 0
         for e in range(epoch):
             print 'Epoch %d:' % e
             # DropLast??
             dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True, drop_last=True)
+            print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
             bar = tqdm.tqdm(dl)
 
             loss_sum = 0
             correct_all = 0
             count = 0
 
-            #print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
                 
             #first = True
             for x, y in bar:
@@ -236,7 +246,9 @@ def epoch_train(train, model, optimizer,
                 scheduler.step()
 
             if validation and (e+1)%validation_epoch==0:
-                epoch_test(validation, model, device)
+                prec = epoch_test(validation, model, device, precision_threshold=90, current_best=best)
+                if prec > best:
+                    best = prec
 
     except Exception, e:
         pydev.err(e)

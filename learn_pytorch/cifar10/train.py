@@ -113,7 +113,7 @@ if __name__=='__main__':
     # make simple Model.
 
     train_transform = Compose([
-        RandomCrop(32, padding=4), 
+        RandomCrop(32, padding=4, padding_mode='reflect'), 
         RandomHorizontalFlip(),
         ToTensor(),
         Cutout(8),
@@ -142,17 +142,21 @@ if __name__=='__main__':
     model.to(cuda)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=5e-4*batch_size, nesterov=True)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, 
+    #        momentum=0.9, weight_decay=5e-4, nesterov=True)
+
     '''
-    optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9, weight_decay=5e-4*batch_size, nesterov=True)
-    def lr_scheduler(e):
-        print e
-        if e < 5:
-            return (e+1) / 5. * 0.4
+    def lr_scheduler(cur):
+        if cur < 5:
+            return (cur+1) / 5. * 0.1
+        elif cur < 10:
+            return 0.1 - (cur-5.) / 5. * 0.1 + 0.1
+        elif cur < 15:
+            return 0.01 - (cur - 10.) / 5. * 0.009
         else:
-            return 0.4 - (e-5.) / (epoch-5.) * 0.4
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_scheduler)
+            return 1e-1
     '''
+    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05)
 
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
@@ -160,6 +164,7 @@ if __name__=='__main__':
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
             batch_size=batch_size, device=cuda, validation=test, validation_epoch=3, 
             scheduler=None)
+            #scheduler=scheduler)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'
