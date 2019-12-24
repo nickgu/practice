@@ -116,8 +116,9 @@ if __name__=='__main__':
         RandomCrop(32, padding=4, padding_mode='reflect'), 
         RandomHorizontalFlip(),
         ToTensor(),
-        Cutout(8),
-        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70))
+        #Cutout(8),
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
+        RandomErasing(p=0.4),
         ])
     test_transform = Compose([
         ToTensor(),
