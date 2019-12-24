@@ -117,7 +117,7 @@ if __name__=='__main__':
         RandomHorizontalFlip(),
         ToTensor(),
         #Cutout(8),
-        RandomErasing(p=0.5),
+        RandomErasing(p=0.4),
         Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70))
         ])
     test_transform = Compose([
