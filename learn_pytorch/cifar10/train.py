@@ -14,74 +14,8 @@ import torch.nn.functional as F
 import torchvision
 from torchvision.transforms import *
 
-#import models
+import models
 
-
-class ConvBNReluPool(nn.Module):
-    def __init__(self, in_chan, out_chan, pool=False):
-        nn.Module.__init__(self)
-        if pool:
-            self.conv = nn.Sequential(
-                    nn.Conv2d(in_chan, out_chan, [3,3], padding=1, bias=False),
-                    nn.BatchNorm2d(out_chan),
-                    nn.MaxPool2d(2)
-                    )
-        else:
-            self.conv = nn.Sequential(
-                    nn.Conv2d(in_chan, out_chan, [3,3], padding=1, bias=False),
-                    nn.BatchNorm2d(out_chan)
-                    )
-
-    def forward(self, input):
-        x = input
-        x = self.conv(x)
-        x = F.relu(x)
-        return x
-
-
-class ResConvBlock(nn.Module):
-    def __init__(self, chan):
-        nn.Module.__init__(self)
-
-        self.conv1 = nn.Sequential(
-                nn.Conv2d(chan, chan, [3,3], padding=1, bias=False),
-                nn.BatchNorm2d(chan)
-                )
-        self.conv2 = nn.Sequential(
-                nn.Conv2d(chan, chan, [3,3], padding=1, bias=False),
-                nn.BatchNorm2d(chan)
-                )
-
-
-    def forward(self, input):
-        x = input
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv1(x)
-        x = F.relu(x)
-        return input + x
-
-
-class TempModel(nn.Module):
-    def __init__(self):
-        nn.Module.__init__(self)
-        self.net = nn.Sequential(
-                ConvBNReluPool(3, 64),
-                ConvBNReluPool(64, 128, pool=True),
-                ResConvBlock(128),
-                ConvBNReluPool(128, 256, pool=True),
-                ConvBNReluPool(256, 512, pool=True),
-                ResConvBlock(512),
-                nn.MaxPool2d(4)
-                )
-        self.fc = nn.Linear(512, 10, bias=False)
-
-    def forward(self, input):
-        x = input
-        x = self.net(x)
-        x = x.view((-1,512))
-        x = self.fc(x)
-        return x
 
 class Cutout:
     def __init__(self, size):
@@ -117,8 +51,8 @@ if __name__=='__main__':
         RandomHorizontalFlip(),
         ToTensor(),
         #Cutout(8),
-        RandomErasing(p=0.4),
-        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70))
+        RandomErasing(p=0.7, scale=(0.25, 0.25)),
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
         ])
     test_transform = Compose([
         ToTensor(),
@@ -133,8 +67,8 @@ if __name__=='__main__':
     #model = models.SimpleConvNet()
     #model = models.Stack5ConvNet()
     #model = models.Res9Net()
-    
-    model = TempModel()
+    #model = models.TempModel()
+    model = models.V3_ResNet()
 
     sys.path.append('../')
     import easy_train
