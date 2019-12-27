@@ -194,7 +194,7 @@ def epoch_test(data, model, device=None, precision_threshold=None, current_best=
 
 def epoch_train(train, model, optimizer, 
         loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10,
-        scheduler=None):
+        scheduler=None, validation_scheduler=None):
     try:
         '''
         import torchvision
@@ -245,7 +245,13 @@ def epoch_train(train, model, optimizer,
             if scheduler:
                 scheduler.step()
 
-            if validation and (e+1)%validation_epoch==0:
+            if validation_scheduler:
+                prec = epoch_test(validation, model, device, precision_threshold=90, current_best=best)
+                if prec > best:
+                    best = prec
+                validation_scheduler.step(prec)
+
+            elif validation and (e+1)%validation_epoch==0:
                 prec = epoch_test(validation, model, device, precision_threshold=90, current_best=best)
                 if prec > best:
                     best = prec

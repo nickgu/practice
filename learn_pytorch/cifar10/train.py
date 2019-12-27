@@ -51,12 +51,12 @@ if __name__=='__main__':
         RandomHorizontalFlip(),
         ToTensor(),
         #Cutout(8),
-        RandomErasing(p=0.7, scale=(0.25, 0.25)),
+        RandomErasing(p=0.7, scale=(0.2, 0.2), value='random'),
         Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
         ])
     test_transform = Compose([
         ToTensor(),
-        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70))
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
         ])
 
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=train_transform)
@@ -77,8 +77,7 @@ if __name__=='__main__':
     model.to(cuda)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, 
-    #        momentum=0.9, weight_decay=5e-4, nesterov=True)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
     '''
     def lr_scheduler(cur):
@@ -92,6 +91,7 @@ if __name__=='__main__':
             return 1e-1
     '''
     #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=1, verbose=True, factor=0.5)
 
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
@@ -100,6 +100,7 @@ if __name__=='__main__':
             batch_size=batch_size, device=cuda, validation=test, validation_epoch=3, 
             scheduler=None)
             #scheduler=scheduler)
+            #validation_scheduler=scheduler)
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'
