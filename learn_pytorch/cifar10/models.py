@@ -236,3 +236,26 @@ class V3_ResNet(nn.Module):
         x = self.fc(x)
         return x
 
+class V4_ResNet(nn.Module):
+    def __init__(self):
+        nn.Module.__init__(self)
+        self.net = nn.Sequential(
+                ConvBNReluPool(3, 64),
+                ConvBNReluPool(64, 128, pool=True),
+                ResConvBlock(128),
+                ConvBNReluPool(128, 256, pool=True),
+                ConvBNReluPool(256, 512, pool=True),
+                ConvBNReluPool(512, 1024, pool=True),
+                ResConvBlock(1024),
+                ConvBNReluPool(1024, 2048, pool=True),
+                )
+        self.fc = nn.Linear(2048, 10, bias=False)
+
+    def forward(self, input):
+        x = input
+        x = self.net(x)
+        x = x.view((-1,2048))
+        x = self.fc(x)
+        return x
+
+

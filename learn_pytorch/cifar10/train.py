@@ -68,7 +68,7 @@ if __name__=='__main__':
     #model = models.Stack5ConvNet()
     #model = models.Res9Net()
     #model = models.TempModel()
-    model = models.V3_ResNet()
+    model = models.V4_ResNet()
 
     sys.path.append('../')
     import easy_train
