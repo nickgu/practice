@@ -27,6 +27,34 @@ class Cutout:
         x[..., bx:bx+self.size, by:by+self.size ] = 0.
         return x
         
+def V1_transform():
+    train_transform = Compose([
+        RandomCrop(32, padding=4, padding_mode='reflect'), 
+        RandomHorizontalFlip(),
+        ToTensor(),
+        RandomErasing(p=0.5, scale=(0.1, 0.1))
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
+        ])
+    test_transform = Compose([
+        ToTensor(),
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
+        ])
+
+    return train_transform, test_transform
+
+def V2_transform():
+    train_transform = Compose([
+        RandomCrop(32, padding=4) 
+        RandomHorizontalFlip(),
+        ToTensor(),
+        Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        ])
+    test_transform = Compose([
+        ToTensor(),
+        Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        ])
+
+    return train_transform, test_transform
 
 if __name__=='__main__':
     arg = pydev.Arg('Cifar10 training program with pytorch.')
@@ -46,32 +74,17 @@ if __name__=='__main__':
 
     # make simple Model.
 
-    train_transform = Compose([
-        RandomCrop(32, padding=4, padding_mode='reflect'), 
-        RandomHorizontalFlip(),
-        ColorJitter(0.2, 0.2, 0.2, 0.2),
-        ToTensor(),
-        #Cutout(8),
-        RandomErasing(p=0.5, scale=(0.1, 0.1)), #, value='random'),
-        #RandomErasing(p=0.7, scale=(0.1, 0.1), value='random'),
-        #RandomErasing(p=0.7, scale=(0.1, 0.1), value='random'),
-        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
-        ])
-    test_transform = Compose([
-        ToTensor(),
-        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
-        ])
+    train_transform, test_transform = V2_transform()
 
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=train_transform)
-    #test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=train_transform)
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
 
     # train phase.
     #model = models.SimpleConvNet()
     #model = models.Stack5ConvNet()
     #model = models.Res9Net()
-    #model = models.V3_ResNet()
-    model = models.V4_ResNet()
+    model = models.V3_ResNet()
+    #model = models.V4_ResNet()
 
     sys.path.append('../')
     import easy_train
@@ -79,8 +92,8 @@ if __name__=='__main__':
     cuda = torch.device('cuda')     # Default CUDA device
     model.to(cuda)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+    #optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
 
     '''
     def lr_scheduler(cur):
@@ -95,14 +108,15 @@ if __name__=='__main__':
     '''
     #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=1, verbose=True, factor=0.5)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50,150], gamma=0.1)
 
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
 
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
             batch_size=batch_size, device=cuda, validation=test, validation_epoch=3, 
-            scheduler=None)
-            #scheduler=scheduler)
+            #scheduler=None)
+            scheduler=scheduler)
             #validation_scheduler=scheduler)
     
     '''

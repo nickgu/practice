@@ -204,14 +204,14 @@ def epoch_train(train, model, optimizer,
         for e in range(epoch):
             print 'Epoch %d:' % e
             # DropLast??
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True, drop_last=True)
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True)
             print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
             bar = tqdm.tqdm(dl)
 
             loss_sum = 0
             correct_all = 0
             count = 0
-
+            epoch_count = 0
                 
             #first = True
             for x, y in bar:
@@ -240,7 +240,9 @@ def epoch_train(train, model, optimizer,
                 loss_sum += cur_loss
                 correct_all += correct
                 count += len(x)
-                bar.set_description("Loss:%.5f Acc:%.5f" % (loss_sum / count, correct_all*1. / count))
+                epoch_count += 1
+                bar.set_description("Loss:%.5f Acc:%.5f" % (
+                    loss_sum / epoch_count, correct_all*1. / count))
 
             if scheduler:
                 scheduler.step()
@@ -285,6 +287,7 @@ def interactive_sgd_train(train, model,
 
             loss_sum = 0
             correct_all = 0
+            epoch_count = 0
             count = 0
                 
             #first = True
@@ -312,7 +315,9 @@ def interactive_sgd_train(train, model,
                 loss_sum += cur_loss
                 correct_all += correct
                 count += len(x)
-                bar.set_description("Loss:%.5f Acc:%.5f" % (loss_sum / count, correct_all*1. / count))
+                epoch_count += 1
+                bar.set_description("Loss:%.5f Acc:%.5f" % (
+                    loss_sum / epoch_count, correct_all*1. / count))
 
             if (e+1)%validation_epoch==0:
                 prec = epoch_test(validation, model, device, precision_threshold=90, current_best=best)
