@@ -261,6 +261,82 @@ def epoch_train(train, model, optimizer,
         pydev.err('Training Exception(may be interrupted by control.)')
 
 
+def interactive_sgd_train(train, model, 
+        loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10, initial_lr=0.01):
+    
+    sgd = torch.optim.SGD(model.parameters(), lr=initial_lr)
+
+    '''
+    import torchvision
+    T = torchvision.transforms.ToPILImage()
+    '''
+    best = 0
+    lr_log = file('lr.log', 'w')
+    lr_log.write('0\t%f\n' % initial_lr)
+
+    for e in range(epoch):
+        try:
+            print 'Epoch %d:' % e
+            # DropLast??
+            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True, drop_last=True)
+            print 'Learning Rate:', sgd.state_dict()['param_groups'][0]['lr']
+            bar = tqdm.tqdm(dl)
+            bar.clear()
+
+            loss_sum = 0
+            correct_all = 0
+            count = 0
+                
+            #first = True
+            for x, y in bar:
+                '''
+                if first:
+                    img = T(x[0])
+                    img.show()
+                    first = False
+                '''
+
+                sgd.zero_grad()
+                if device:
+                    x = x.to(device)
+                    y = y.to(device)
+
+                y_ = model(x)
+                loss = loss_fn(y_, y)
+                correct = y.eq(y_.max(1)[1]).sum()
+
+                cur_loss = loss
+                loss.backward()
+                sgd.step()
+
+                loss_sum += cur_loss
+                correct_all += correct
+                count += len(x)
+                bar.set_description("Loss:%.5f Acc:%.5f" % (loss_sum / count, correct_all*1. / count))
+
+            if (e+1)%validation_epoch==0:
+                prec = epoch_test(validation, model, device, precision_threshold=90, current_best=best)
+                if prec > best:
+                    best = prec
+
+        except BaseException, exc:
+            pydev.err(e)
+            pydev.err('Training Exception(may be interrupted by control.)')
+
+            sys.stdout.write('Input new LearningRate >')
+            s = sys.stdin.readline()
+            new_lr = float(s.strip())
+            print 'New LearningRate:%s' % new_lr
+
+            lr_log.write('%d\t%f\n' % (e, new_lr))
+
+            sd = sgd.state_dict()
+            sd['param_groups'][0]['lr'] = new_lr
+            sgd.load_state_dict(sd)
+
+            continue
+
+
 if __name__=='__main__':
     # test code.
     class LR(nn.Module):

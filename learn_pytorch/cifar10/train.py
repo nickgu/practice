@@ -49,9 +49,12 @@ if __name__=='__main__':
     train_transform = Compose([
         RandomCrop(32, padding=4, padding_mode='reflect'), 
         RandomHorizontalFlip(),
+        ColorJitter(0.2, 0.2, 0.2, 0.2),
         ToTensor(),
         #Cutout(8),
-        RandomErasing(p=0.7, scale=(0.2, 0.2), value='random'),
+        RandomErasing(p=0.5, scale=(0.1, 0.1)), #, value='random'),
+        #RandomErasing(p=0.7, scale=(0.1, 0.1), value='random'),
+        #RandomErasing(p=0.7, scale=(0.1, 0.1), value='random'),
         Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
         ])
     test_transform = Compose([
@@ -67,7 +70,7 @@ if __name__=='__main__':
     #model = models.SimpleConvNet()
     #model = models.Stack5ConvNet()
     #model = models.Res9Net()
-    #model = models.TempModel()
+    #model = models.V3_ResNet()
     model = models.V4_ResNet()
 
     sys.path.append('../')
@@ -101,6 +104,12 @@ if __name__=='__main__':
             scheduler=None)
             #scheduler=scheduler)
             #validation_scheduler=scheduler)
+    
+    '''
+    easy_train.interactive_sgd_train(train, model, loss_fn, epoch, 
+            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3)
+    '''
+
     easy_train.epoch_test(test, model, device=cuda)
 
     print 'train over'

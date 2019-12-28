@@ -190,7 +190,7 @@ class ResConvBlock(nn.Module):
         return input + x
 
 
-class TempModel(nn.Module):
+class V2_ResNet(nn.Module):
     '''
         92.29% at batch=128
     '''
@@ -215,6 +215,20 @@ class TempModel(nn.Module):
         return x
 
 class V3_ResNet(nn.Module):
+    '''
+        90% at E32
+
+        V0: augment
+        train_transform = Compose([
+        RandomCrop(32, padding=4, padding_mode='reflect'), 
+        RandomHorizontalFlip(),
+        ToTensor(),
+        #Cutout(8),
+        RandomErasing(p=0.5, scale=(0.1, 0.1)), #, value='random'),
+        Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
+        ])
+
+    '''
     def __init__(self):
         nn.Module.__init__(self)
         self.net = nn.Sequential(
@@ -237,6 +251,10 @@ class V3_ResNet(nn.Module):
         return x
 
 class V4_ResNet(nn.Module):
+    '''
+        90% at E68 (bs=128)
+        90% at E26 (V0_augment), 300~92.56
+    '''
     def __init__(self):
         nn.Module.__init__(self)
         self.net = nn.Sequential(
