@@ -14,7 +14,8 @@ import torch.nn.functional as F
 import torchvision
 from torchvision.transforms import *
 
-import models
+import my_models
+from models import *
 
 
 class Cutout:
@@ -32,7 +33,7 @@ def V1_transform():
         RandomCrop(32, padding=4, padding_mode='reflect'), 
         RandomHorizontalFlip(),
         ToTensor(),
-        RandomErasing(p=0.5, scale=(0.1, 0.1))
+        RandomErasing(p=0.5, scale=(0.1, 0.1)),
         Normalize(mean=(125.31, 122.95, 113.87), std=(62.99, 62.09, 66.70)),
         ])
     test_transform = Compose([
@@ -44,7 +45,7 @@ def V1_transform():
 
 def V2_transform():
     train_transform = Compose([
-        RandomCrop(32, padding=4) 
+        RandomCrop(32, padding=4),
         RandomHorizontalFlip(),
         ToTensor(),
         Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -80,11 +81,12 @@ if __name__=='__main__':
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
 
     # train phase.
-    #model = models.SimpleConvNet()
-    #model = models.Stack5ConvNet()
-    #model = models.Res9Net()
-    model = models.V3_ResNet()
-    #model = models.V4_ResNet()
+    #model = my_models.SimpleConvNet()
+    #model = my_models.Stack5ConvNet()
+    #model = my_models.Res9Net()
+    #model = my_models.V3_ResNet()
+    #model = my_models.V4_ResNet()
+    model = MobileNetV2()
 
     sys.path.append('../')
     import easy_train
@@ -108,13 +110,14 @@ if __name__=='__main__':
     '''
     #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=1, verbose=True, factor=0.5)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50,150], gamma=0.1)
+    #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50,120,200], gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 100, gamma=0.1)
 
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
 
     easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
-            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3, 
+            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3,
             #scheduler=None)
             scheduler=scheduler)
             #validation_scheduler=scheduler)

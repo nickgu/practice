@@ -151,11 +151,12 @@ def easy_test(model, x, y):
     #
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
-    y_ = model.forward(x).max(1)[1]
-    #   check the precision
-    hit = y.eq(y_).sum()
-    total = len(y)
-    print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
+    with torch.no_grad():
+        y_ = model.forward(x).max(1)[1]
+        #   check the precision
+        hit = y.eq(y_).sum()
+        total = len(y)
+        print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
 
 def epoch_test(data, model, device=None, precision_threshold=None, current_best=0):
     # easy test for multiclass output.
@@ -168,29 +169,30 @@ def epoch_test(data, model, device=None, precision_threshold=None, current_best=
     #
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
-    dl = torch.utils.data.DataLoader(data, batch_size=512)
-    total = 0
-    hit = 0
-    for x, y in dl:
-        if device:
-            x = x.to(device)
-            y = y.to(device)
+    with torch.no_grad():
+        dl = torch.utils.data.DataLoader(data, batch_size=512)
+        total = 0
+        hit = 0
+        for x, y in dl:
+            if device:
+                x = x.to(device)
+                y = y.to(device)
 
-        y_ = model(x).max(1)[1]
-        h = y.eq(y_).sum()
-        hit += h
-        total += len(y)
+            y_ = model(x).max(1)[1]
+            h = y.eq(y_).sum()
+            hit += h
+            total += len(y)
 
-    precision = hit * 100. / total
-    if current_best < precision:
-        current_best = precision
+        precision = hit * 100. / total
+        if current_best < precision:
+            current_best = precision
 
-    if precision_threshold is not None and precision >= precision_threshold:
-        print >> sys.stderr, pydev.ColorString.yellow(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
-    else:
-        print >> sys.stderr, pydev.ColorString.red(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
+        if precision_threshold is not None and precision >= precision_threshold:
+            print >> sys.stderr, pydev.ColorString.yellow(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
+        else:
+            print >> sys.stderr, pydev.ColorString.red(' >>> test_acc=%.2f%% (%d/%d) best=%.2f%% <<<' % (precision, hit, total, current_best))
 
-    return precision
+        return precision
 
 def epoch_train(train, model, optimizer, 
         loss_fn, epoch, batch_size=32, device=None, validation=None, validation_epoch=10,
