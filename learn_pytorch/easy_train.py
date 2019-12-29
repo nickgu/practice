@@ -158,7 +158,7 @@ def easy_test(model, x, y):
         total = len(y)
         print >> sys.stderr, pydev.ColorString.red(' >>> EASY_TEST_RESULT: %.2f%% (%d/%d) <<<' % (hit*100./total, hit, total))
 
-def epoch_test(data, model, device=None, precision_threshold=None, current_best=0):
+def epoch_test(dataloader, model, device=None, precision_threshold=None, current_best=0):
     # easy test for multiclass output.
     # the net may design like this:
     #
@@ -170,10 +170,9 @@ def epoch_test(data, model, device=None, precision_threshold=None, current_best=
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
     with torch.no_grad():
-        dl = torch.utils.data.DataLoader(data, batch_size=512)
         total = 0
         hit = 0
-        for x, y in dl:
+        for x, y in dataloader:
             if device:
                 x = x.to(device)
                 y = y.to(device)
@@ -206,9 +205,8 @@ def epoch_train(train, model, optimizer,
         for e in range(epoch):
             print 'Epoch %d:' % e
             # DropLast??
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True)
             print 'LR:', optimizer.state_dict()['param_groups'][0]['lr']
-            bar = tqdm.tqdm(dl)
+            bar = tqdm.tqdm(train)
 
             loss_sum = 0
             correct_all = 0
@@ -281,10 +279,8 @@ def interactive_sgd_train(train, model,
     for e in range(epoch):
         try:
             print 'Epoch %d:' % e
-            # DropLast??
-            dl = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True, drop_last=True)
             print 'Learning Rate:', sgd.state_dict()['param_groups'][0]['lr']
-            bar = tqdm.tqdm(dl)
+            bar = tqdm.tqdm(train)
             bar.clear()
 
             loss_sum = 0

@@ -43,6 +43,22 @@ def V1_transform():
 
     return train_transform, test_transform
 
+def V3_transform():
+    train_transform = Compose([
+        RandomCrop(32, padding=4, padding_mode='reflect'), 
+        RandomHorizontalFlip(),
+        ToTensor(),
+        RandomErasing(p=0.5, scale=(0.1, 0.1)),
+        Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        ])
+    test_transform = Compose([
+        ToTensor(),
+        Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        ])
+
+    return train_transform, test_transform
+
+
 def V2_transform():
     train_transform = Compose([
         RandomCrop(32, padding=4),
@@ -75,10 +91,14 @@ if __name__=='__main__':
 
     # make simple Model.
 
-    train_transform, test_transform = V2_transform()
+    train_transform, test_transform = V1_transform()
 
     train = torchvision.datasets.cifar.CIFAR10('../../dataset/', transform=train_transform)
+    train_dataloader = torch.utils.data.DataLoader(train, shuffle=True, batch_size=batch_size, pin_memory=True)
+
     test =  torchvision.datasets.cifar.CIFAR10('../../dataset/', train=False, transform=test_transform)
+    test_dataloader = torch.utils.data.DataLoader(test, batch_size=512)
+
 
     # train phase.
     #model = my_models.SimpleConvNet()
@@ -87,6 +107,7 @@ if __name__=='__main__':
     #model = my_models.V3_ResNet()
     #model = my_models.V4_ResNet()
     model = MobileNetV2()
+    #model = DPN92()
 
     sys.path.append('../')
     import easy_train
@@ -94,8 +115,8 @@ if __name__=='__main__':
     cuda = torch.device('cuda')     # Default CUDA device
     model.to(cuda)
 
-    #optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
 
     '''
     def lr_scheduler(cur):
@@ -111,15 +132,15 @@ if __name__=='__main__':
     #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=1, verbose=True, factor=0.5)
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50,120,200], gamma=0.1)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 100, gamma=0.1)
+    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 100, gamma=0.1)
 
     loss_fn = nn.CrossEntropyLoss()
     #loss_fn = nn.NLLLoss()
 
-    easy_train.epoch_train(train, model, optimizer, loss_fn, epoch, 
-            batch_size=batch_size, device=cuda, validation=test, validation_epoch=3,
-            #scheduler=None)
-            scheduler=scheduler)
+    easy_train.epoch_train(train_dataloader, model, optimizer, loss_fn, epoch, 
+            batch_size=batch_size, device=cuda, validation=test_dataloader, validation_epoch=3,
+            scheduler=None)
+            #scheduler=scheduler)
             #validation_scheduler=scheduler)
     
     '''
@@ -127,7 +148,7 @@ if __name__=='__main__':
             batch_size=batch_size, device=cuda, validation=test, validation_epoch=3)
     '''
 
-    easy_train.epoch_test(test, model, device=cuda)
+    easy_train.epoch_test(test_dataloader, model, device=cuda)
 
     print 'train over'
     #easy_train.easy_test(model, train_x, train_y)
