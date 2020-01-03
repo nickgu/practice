@@ -37,27 +37,6 @@ def readLines(filename):
     lines = open(filename, encoding='utf-8').read().strip().split('\n')
     return [unicodeToAscii(line) for line in lines]
 
-# Build the category_lines dictionary, a list of lines per category
-category_lines = {}
-all_categories = []
-for filename in findFiles('data/names/*.txt'):
-    category = os.path.splitext(os.path.basename(filename))[0]
-    all_categories.append(category)
-    lines = readLines(filename)
-    category_lines[category] = lines
-
-n_categories = len(all_categories)
-
-if n_categories == 0:
-    raise RuntimeError('Data not found. Make sure that you downloaded data '
-        'from https://download.pytorch.org/tutorial/data.zip and extract it to '
-        'the current directory.')
-
-print('# categories:', n_categories, all_categories)
-print(unicodeToAscii("O'Néàl"))
-
-
-
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(RNN, self).__init__()
@@ -131,10 +110,7 @@ def randomTrainingExample():
     target_line_tensor = targetTensor(line)
     return category_tensor, input_line_tensor, target_line_tensor
 
-criterion = nn.NLLLoss()
-learning_rate = 0.0005
-
-def train(category_tensor, input_line_tensor, target_line_tensor):
+def train(category_tensor, input_line_tensor, target_line_tensor, criterion, learning_rate):
     target_line_tensor.unsqueeze_(-1)
     hidden = rnn.initHidden()
 
@@ -166,8 +142,11 @@ def timeSince(since):
     s -= m * 60
     return '%dm %ds' % (m, s)
 
-if __name__=='__main__':
+def phase_train():
     rnn = RNN(n_letters, 128, n_letters)
+
+    criterion = nn.NLLLoss()
+    learning_rate = 0.0005
 
     n_iters = 100000
     print_every = 5000
@@ -175,10 +154,29 @@ if __name__=='__main__':
     all_losses = []
     total_loss = 0 # Reset every plot_every iters
 
+    # Build the category_lines dictionary, a list of lines per category
+    category_lines = {}
+    all_categories = []
+    for filename in findFiles('data/names/*.txt'):
+        category = os.path.splitext(os.path.basename(filename))[0]
+        all_categories.append(category)
+        lines = readLines(filename)
+        category_lines[category] = lines
+
+    n_categories = len(all_categories)
+
+    if n_categories == 0:
+        raise RuntimeError('Data not found. Make sure that you downloaded data '
+            'from https://download.pytorch.org/tutorial/data.zip and extract it to '
+            'the current directory.')
+
+    print('# categories:', n_categories, all_categories)
+    print(unicodeToAscii("O'Néàl"))
+
     start = time.time()
 
     for iter in range(1, n_iters + 1):
-        output, loss = train(*randomTrainingExample())
+        output, loss = train(*randomTrainingExample(), criterion, learning_rate)
         total_loss += loss
 
         if iter % print_every == 0:
@@ -190,3 +188,45 @@ if __name__=='__main__':
 
 
     torch.save(rnn, 'models/name.pkl')
+
+if __name__=='__main__':
+    if sys.argv[1] == '--train':
+        print('Phase trainging.')
+        phase_train()
+
+    elif sys.argv[1] == '--test':
+        print('Phase testing.')
+        max_length = 20
+        rnn = torch.load('models/name.pkl')
+
+        # Sample from a category and starting letter
+        def sample(category, start_letter='A'):
+            with torch.no_grad():  # no need to track history in sampling
+                category_tensor = categoryTensor(category)
+                input = inputTensor(start_letter)
+                hidden = rnn.initHidden()
+
+                output_name = start_letter
+
+                for i in range(max_length):
+                    output, hidden = rnn(category_tensor, input[0], hidden)
+                    topv, topi = output.topk(1)
+                    topi = topi[0][0]
+                    if topi == n_letters - 1:
+                        break
+                    else:
+                        letter = all_letters[topi]
+                        output_name += letter
+                    input = inputTensor(letter)
+
+                return output_name
+
+        # Get multiple samples from one category and multiple starting letters
+        def samples(category, start_letters='ABC'):
+            for start_letter in start_letters:
+                print(sample(category, start_letter))
+
+
+        cate, start_letters = sys.argv[2], sys.argv[3]
+        print(sample(cate, start_letters))
+
