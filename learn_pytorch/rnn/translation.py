@@ -77,14 +77,6 @@ def normalizeString(s):
     s = re.sub(r"[^a-zA-Z.!?]+", r" ", s)
     return s
 
-
-######################################################################
-# To read the data file we will split the file into lines, and then split
-# lines into pairs. The files are all English → Other Language, so if we
-# want to translate from Other Language → English I added the ``reverse``
-# flag to reverse the pairs.
-#
-
 def readLangs(lang1, lang2, reverse=False):
     print("Reading lines...")
 
@@ -105,7 +97,6 @@ def readLangs(lang1, lang2, reverse=False):
         output_lang = Lang(lang2)
 
     return input_lang, output_lang, pairs
-
 
 ######################################################################
 # Since there are a *lot* of example sentences and we want to train
@@ -541,43 +532,6 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
 
     #showPlot(plot_losses)
 
-
-'''
-######################################################################
-# Plotting results
-# ----------------
-#
-# Plotting is done with matplotlib, using the array of loss values
-# ``plot_losses`` saved while training.
-#
-
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-import matplotlib.ticker as ticker
-import numpy as np
-
-
-def showPlot(points):
-    plt.figure()
-    fig, ax = plt.subplots()
-    # this locator puts ticks at regular intervals
-    loc = ticker.MultipleLocator(base=0.2)
-    ax.yaxis.set_major_locator(loc)
-    plt.plot(points)
-'''
-
-
-######################################################################
-# Evaluation
-# ==========
-#
-# Evaluation is mostly the same as training, but there are no targets so
-# we simply feed the decoder's predictions back to itself for each step.
-# Every time it predicts a word we add it to the output string, and if it
-# predicts the EOS token we stop there. We also store the decoder's
-# attention outputs for display later.
-#
-
 def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
@@ -613,12 +567,6 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
 
         return decoded_words, decoder_attentions[:di + 1]
 
-
-######################################################################
-# We can evaluate random sentences from the training set and print out the
-# input, target, and output to make some subjective quality judgements:
-#
-
 def evaluateRandomly(encoder, decoder, n=10):
     for i in range(n):
         pair = random.choice(pairs)
@@ -628,7 +576,6 @@ def evaluateRandomly(encoder, decoder, n=10):
         output_sentence = ' '.join(output_words)
         print('<', output_sentence)
         print('')
-
 
 ######################################################################
 # Training and Evaluating
