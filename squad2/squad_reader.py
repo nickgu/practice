@@ -31,11 +31,17 @@ class SquadReader():
                     qid = qa['id']
                     question = u2a(qa['question'])
                     ans = qa['answers']
-                    is_possbible = qa['is_impossible']
-                    yield title, context, qid, question, ans, is_possbible
+                    is_impossbible = qa['is_impossible']
+                    yield title, context, qid, question, ans, is_impossbible
 
 if __name__=='__main__':
-    path = '../dataset/squad2/train-v2.0.json'
+    import sys
+    path = sys.argv[1]
     reader = SquadReader(path)
-    for title, context, qid, question, ans, is_possbible in reader.read():
-        print question
+    answer_dict = {}
+    for title, context, qid, question, ans, is_impossible in reader.read():
+        answer_dict[qid] = ''
+        if is_impossible:
+            print question, is_impossible
+
+    print >> file('ans.out', 'w'),  json.dumps(answer_dict)
