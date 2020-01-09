@@ -24,15 +24,25 @@ class SquadReader():
 
     def read(self):
         for item in self.__data['data']:
-            title = u2a(item['title'])
+            title = item['title']
             for para in item['paragraphs']:
-                context = u2a(para['context'])
+                context = para['context']
                 for qa in para['qas']:
                     qid = qa['id']
-                    question = u2a(qa['question'])
+                    question = qa['question']
                     ans = qa['answers']
                     is_impossbible = qa['is_impossible']
                     yield title, context, qid, question, ans, is_impossbible
+
+    def iter_doc(self):
+        for item in self.__data['data']:
+            title = item['title']
+            doc = u''
+            for para in item['paragraphs']:
+                context = para['context']
+                doc += context + '\n'
+            yield title, doc
+
 
 if __name__=='__main__':
     import sys
