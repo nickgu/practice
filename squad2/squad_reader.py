@@ -22,7 +22,10 @@ class SquadReader():
     def __init__(self, filename):
         self.__data = json.loads(file(filename).read())
 
-    def read(self):
+    def iter_instance(self):
+        '''
+            return (title, paragraph, qid, question, ans, is_impossible)
+        '''
         for item in self.__data['data']:
             title = item['title']
             for para in item['paragraphs']:
@@ -31,8 +34,8 @@ class SquadReader():
                     qid = qa['id']
                     question = qa['question']
                     ans = qa['answers']
-                    is_impossbible = qa['is_impossible']
-                    yield title, context, qid, question, ans, is_impossbible
+                    is_impossible = qa['is_impossible']
+                    yield title, context, qid, question, ans, is_impossible
 
     def iter_doc(self):
         for item in self.__data['data']:
@@ -43,15 +46,28 @@ class SquadReader():
                 doc += context + '\n'
             yield title, doc
 
+    def iter_question(self):
+        for item in self.__data['data']:
+            for para in item['paragraphs']:
+                for qa in para['qas']:
+                    qid = qa['id']
+                    question = qa['question']
+                    ans = qa['answers']
+                    is_impossible = qa['is_impossible']
+                    yield qid, question, ans, is_impossible
 
 if __name__=='__main__':
     import sys
+    import torchtext 
+
     path = sys.argv[1]
     reader = SquadReader(path)
-    answer_dict = {}
-    for title, context, qid, question, ans, is_impossible in reader.read():
-        answer_dict[qid] = ''
-        if is_impossible:
-            print question, is_impossible
 
-    print >> file('ans.out', 'w'),  json.dumps(answer_dict)
+    tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    maxl = 0
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        l = len(list(tokenizer(title))) + len(list(tokenizer(context))) + len(list(tokenizer(question)))
+        if l > maxl:
+            maxl = l
+
+    print 'maxl:', maxl
