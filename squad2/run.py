@@ -6,6 +6,8 @@
 import squad_reader
 import torch
 import torchtext 
+import torch.nn.utils.rnn as rnn_utils
+import sys
 
 class TokenID:
     def __init__(self):
@@ -56,22 +58,24 @@ def token2id(train_reader, test_reader, ider, tokenizer):
 
 class Encoder(torch.nn.Module):
     def __init__(self, vocab_size, emb_size, hidden_size):
+        super(Encoder, self).__init__()
+
         self.__vocab_size = vocab_size
         self.__emb_size = emb_size
         self.__hidden_size = hidden_size
 
         self.__emb = torch.nn.Embedding(vocab_size, emb_size)
-        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3)
-        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3)
-        self.__fc = torch.nn.Dense(3, activation='relu')
+        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3, batch_first=True)
+        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3, batch_first=True)
+        self.__fc = torch.nn.Linear(hidden_size, 3)
 
     def forward(self, question_tokens, context_tokens):
         q_emb = self.__emb(question_tokens)
         c_emb = self.__emb(context_tokens)
             
-        _, q_hidden = self.__question_rnn(q_emb, hidden)
+        _, q_hidden = self.__question_rnn(q_emb)
         out, _ = self.__context_rnn(c_emb, q_hidden)
-        out = self.fc(out)
+        out = self.__fc(out)
         return out
 
 if __name__=='__main__':
@@ -81,6 +85,7 @@ if __name__=='__main__':
 
     tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
     ider = TokenID()
+    ider.add('<eof>')
 
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
@@ -135,18 +140,51 @@ if __name__=='__main__':
             else:
                 c_out.append(0)
 
-        train_question.append(q_ids)
-        train_context.append(c_ids)
-        train_output.append(c_out)
+        train_question.append(torch.tensor(q_ids))
+        train_context.append(torch.tensor(c_ids))
+        train_output.append(torch.tensor(c_out))
 
-    print >> file('temp/q', 'w'), train_question[:10]
-    print >> file('temp/c', 'w'), train_context[:10]
-    print >> file('temp/o', 'w'), train_output[:10]
+        # test code.
+        count += 1
+        if count > 1000:
+            break
 
+    print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
+
+
+    # hyper-param.
+    batch_size = 8
+    input_emb_size = 32
+    hidden_size = 128
 
     # make model.
-    #model = Encoder()
+    model = Encoder(ider.size(), input_emb_size, hidden_size)
 
+    def make_packed_pad_sequence(data):
+        return rnn_utils.pack_padded_sequence(
+                rnn_utils.pad_sequence(data, batch_first=True), 
+                lengths=(5,2,4), 
+                batch_first=True, 
+                enforce_sorted=False
+            )
+
+    for epoch in range(10):
+        for s in range(0, len(train_question), batch_size):
+            batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
+            batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
+
+            print batch_question_ids
+            print batch_context_ids
+
+            #batch_context_output = torch.tensors()
+
+            y = model(batch_question_ids, batch_context_ids)
+            print y.shape
+            #loss = criterion(batch_context_output, y)
+            #opt.step()
+            break
+
+        break
 
 
 
