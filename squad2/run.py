@@ -4,6 +4,7 @@
 # 
 
 import squad_reader
+import torch
 import torchtext 
 
 class TokenID:
@@ -15,6 +16,7 @@ class TokenID:
         if term not in self.__word2idx:
             self.__word2idx[term] = len(self.__idx2word)
             self.__idx2word.append(term)
+        return self.__word2idx[term]
 
     def get_id(self, term):
         return self.__word2idx.get(term, -1)
@@ -70,6 +72,7 @@ class Encoder(torch.nn.Module):
         _, q_hidden = self.__question_rnn(q_emb, hidden)
         out, _ = self.__context_rnn(c_emb, q_hidden)
         out = self.fc(out)
+        return out
 
 if __name__=='__main__':
     data_path = '../dataset/squad2/'
@@ -82,11 +85,69 @@ if __name__=='__main__':
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
     
+    '''
     token2id(train_reader, test_reader, ider, tokenizer)
     print ider.size()
+    '''
+
+    count = 0
+    train_question = []
+    train_context = []
+    train_output = []
+    for title, context, qid, question, ans, is_impossible in train_reader.iter_instance():
+        ans_start = -1
+        ans_text = 'none'
+        if not is_impossible:
+            ans_start = ans[0]['answer_start']
+            ans_text = ans[0]['text']
+
+        context_tokens = []
+        answer_token_first = -1
+        answer_token_last = -1
+
+        if context[ans_start:ans_start+len(ans_text)] == ans_text:
+            a = context[:ans_start]
+            b = context[ans_start : ans_start + len(ans_text)]
+            c = context[ans_start+len(ans_text):]
+
+            context_tokens += tokenizer(a)
+            answer_token_first = len(context_tokens)
+            context_tokens += tokenizer(b)
+            answer_token_last = len(context_tokens)-1
+            context_tokens += tokenizer(c)
+        else:
+            context_tokens = tokenizer(context)
+
+        question_tokens = tokenizer(question)
+
+        # question_tokens, context_tokens, context_output(0,1,2)
+        q_ids = []
+        c_ids = []
+        c_out = []
+        for tok in question_tokens:
+            q_ids.append( ider.add(tok) )
+        for idx, tok in enumerate(context_tokens):
+            c_ids.append( ider.add(tok) )
+            if idx == answer_token_first:
+                c_out.append(1)
+            elif idx == answer_token_last:
+                c_out.append(2)
+            else:
+                c_out.append(0)
+
+        train_question.append(q_ids)
+        train_context.append(c_ids)
+        train_output.append(c_out)
+
+    print >> file('temp/q', 'w'), train_question[:10]
+    print >> file('temp/c', 'w'), train_context[:10]
+    print >> file('temp/o', 'w'), train_output[:10]
+
 
     # make model.
-    emb = torch.nn.Embedding(iter.size())
+    #model = Encoder()
+
+
 
 
     

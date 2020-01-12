@@ -56,12 +56,8 @@ class SquadReader():
                     is_impossible = qa['is_impossible']
                     yield qid, question, ans, is_impossible
 
-if __name__=='__main__':
-    import sys
+def count_tokens(reader):
     import torchtext 
-
-    path = sys.argv[1]
-    reader = SquadReader(path)
 
     tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
     maxl = 0
@@ -71,3 +67,20 @@ if __name__=='__main__':
             maxl = l
 
     print 'maxl:', maxl
+
+def list_titles(reader):
+    for title, doc in reader.iter_doc():
+        print title.encode('gb18030') + ' (%s)' % len(doc)
+
+if __name__=='__main__':
+    import sys
+    path = sys.argv[1]
+    reader = SquadReader(path)
+
+    #count_tokens(reader)
+    list_titles(reader)
+
+
+
+
+
