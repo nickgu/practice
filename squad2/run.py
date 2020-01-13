@@ -63,19 +63,27 @@ class Encoder(torch.nn.Module):
         self.__vocab_size = vocab_size
         self.__emb_size = emb_size
         self.__hidden_size = hidden_size
-        self.__layer_num = 3
+        self.__layer_num = 1
 
         self.__emb = torch.nn.Embedding(vocab_size, emb_size)
         self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
         self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
-        self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3)
+        #self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3)
+        self.__fc = torch.nn.Linear(self.__hidden_size, 3)
 
     def forward(self, question_tokens, context_tokens):
-        q_emb = self.__emb(question_tokens)
+        #q_emb = self.__emb(question_tokens)
         c_emb = self.__emb(context_tokens)
             
-        _, q_hidden = self.__question_rnn(q_emb)
-        context_out, _ = self.__context_rnn(c_emb, q_hidden)
+        #_, q_hidden = self.__question_rnn(q_emb)
+        #context_out, _ = self.__context_rnn(c_emb, q_hidden)
+
+        context_out, _ = self.__context_rnn(c_emb)
+        return self.__fc(context_out)
+
+
+        '''
+        context_out, _ = self.__context_rnn(c_emb)
         # need to cross.
         seq_len = context_out.shape[1] # batch, seq_len, 3
         c = q_hidden[0].expand( (seq_len, -1, -1, -1))
@@ -84,6 +92,11 @@ class Encoder(torch.nn.Module):
         concat_out = torch.cat((context_out, c), dim=2)
         out = self.__fc(concat_out)
         return out
+        '''
+
+    def check_gradient(self):
+        for p in self.__fc.parameters():
+            print p.grad
 
 if __name__=='__main__':
     data_path = '../dataset/squad2/'
@@ -106,6 +119,7 @@ if __name__=='__main__':
     train_question = []
     train_context = []
     train_output = []
+    train_answer_range = []
     for title, context, qid, question, ans, is_impossible in train_reader.iter_instance():
         ans_start = -1
         ans_text = 'none'
@@ -150,6 +164,7 @@ if __name__=='__main__':
         train_question.append(torch.tensor(q_ids))
         train_context.append(torch.tensor(c_ids))
         train_output.append(torch.tensor(c_out))
+        train_answer_range.append( (answer_token_first, answer_token_last) )
 
         # test code.
         count += 1
@@ -160,15 +175,15 @@ if __name__=='__main__':
 
 
     # hyper-param.
-    batch_size = 32
-    input_emb_size = 32
-    hidden_size = 128
+    batch_size = 1
+    input_emb_size = 8
+    hidden_size = 8
 
     # make model.
     model = Encoder(ider.size(), input_emb_size, hidden_size)
 
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     def make_packed_pad_sequence(data):
         return rnn_utils.pack_padded_sequence(
@@ -178,9 +193,23 @@ if __name__=='__main__':
                 enforce_sorted=False
             )
 
-    for epoch in range(10):
+    def test_code():
+        # test code.
+        test_size = 1
+        batch_question_ids = rnn_utils.pad_sequence(train_question[:test_size], batch_first=True)
+        batch_context_ids = rnn_utils.pad_sequence(train_context[:test_size], batch_first=True)
+
+        y = model(batch_question_ids, batch_context_ids)
+        p = y.softmax(dim=2)
+        print p.permute((0,2,1)).max(dim=2)
+
+        print train_answer_range[:test_size]
+
+    for epoch in range(50):
         print 'Epoch %d' % epoch
-        for s in range(0, len(train_question), batch_size):
+        test_code()
+        #for s in range(0, len(train_question), batch_size):
+        for s in range(0, 1, batch_size):
             optimizer.zero_grad()
 
             batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
@@ -188,20 +217,39 @@ if __name__=='__main__':
 
             temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
             batch_context_output = torch.tensor(temp_output)
-            #print batch_context_output
 
             y = model(batch_question_ids, batch_context_ids)
-            #print y.shape
-            #print batch_context_output.shape
-            loss = criterion(y.view(-1,3), batch_context_output.view(-1))
+
+            p = y.softmax(dim=2)
+            print p[0][50]
+            print p[0][53]
+            print batch_context_output[0][50]
+            print batch_context_output[0][53]
+
+            y = y.view(-1, 3)
+            y_ = torch.randint(3, [32*205])
+
+
+
+            #print 'check model gradient'
+            #model.check_gradient()
+
+            loss = criterion(y.view(-1,3), batch_context_output.view([-1]))
+
             loss.backward()
-            print loss
+            print 'loss', loss
+
+            #print 'check model gradient'
+            #model.check_gradient()
             optimizer.step()
 
+            # test converge.
+            #break
+        #break
 
 
 
-    
+
 
 
 
