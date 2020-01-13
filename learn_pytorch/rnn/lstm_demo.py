@@ -3,7 +3,6 @@
 # author: nickgu 
 # 
 
-import squad_reader
 import torch
 import torchtext 
 import torch.nn.utils.rnn as rnn_utils
@@ -39,78 +38,65 @@ if __name__=='__main__':
             - label: if the char of previous is the same, label 1.
     '''
     
-    train_x = torch.randint(20, [20])
+    batch_size = 100
+    length = 64
+    vocab_size = 16
+    train_x = torch.randint(vocab_size, [batch_size, length])
+    train_y = []
+    for b in range(batch_size):
+        t = []
+        for i in range(length):
+            if train_x[b][i] == train_x[b][i-1]:
+                t.append(1)
+            else:
+                t.append(0)
+        train_y.append(t)
+    train_y = torch.tensor(train_y)
+
+    print train_x
+    print train_y
 
     # make model.
     model = RNN()
 
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    def make_packed_pad_sequence(data):
-        return rnn_utils.pack_padded_sequence(
-                rnn_utils.pad_sequence(data, batch_first=True), 
-                lengths=(5,2,4), 
-                batch_first=True, 
-                enforce_sorted=False
-            )
 
-    def test_code():
-        # test code.
-        test_size = 1
-        batch_question_ids = rnn_utils.pad_sequence(train_question[:test_size], batch_first=True)
-        batch_context_ids = rnn_utils.pad_sequence(train_context[:test_size], batch_first=True)
-
-        y = model(batch_question_ids, batch_context_ids)
-        p = y.softmax(dim=2)
-        print p.permute((0,2,1)).max(dim=2)
-
-        print train_answer_range[:test_size]
-
-    for epoch in range(50):
+    for epoch in range(200):
         print 'Epoch %d' % epoch
-        test_code()
-        #for s in range(0, len(train_question), batch_size):
-        for s in range(0, 1, batch_size):
-            optimizer.zero_grad()
+        #test_code()
 
-            batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
-            batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
-
-            temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
-            batch_context_output = torch.tensor(temp_output)
-
-            y = model(batch_question_ids, batch_context_ids)
-
-            p = y.softmax(dim=2)
-            print p[0][50]
-            print p[0][53]
-            print batch_context_output[0][50]
-            print batch_context_output[0][53]
-
-            y = y.view(-1, 3)
-            y_ = torch.randint(3, [32*205])
+        optimizer.zero_grad()
+        y = model(train_x)
+        loss = criterion(y.view(-1,2), train_y.view(-1))
+        loss.backward()
+        print 'loss', loss
+        optimizer.step()
 
 
+    # test code.
+    count = 0
+    correct = 0
+    error = 0
+    for test_count in range(100):
+        x = torch.randint(vocab_size, [1, length])
+        y = model(x).softmax(dim=2).max(dim=2).indices
+        print x.tolist()
+        print y.tolist()
+        last = -1
+        for a, b in zip(x.view(-1).tolist(), y.view(-1).tolist()):
+            if a == last:
+                if b == 1: 
+                    correct+=1
+                count += 1
+            else:
+                if b == 1:
+                    error+=1
+            last = a
 
-            #print 'check model gradient'
-            #model.check_gradient()
-
-            loss = criterion(y.view(-1,3), batch_context_output.view([-1]))
-
-            loss.backward()
-            print 'loss', loss
-
-            #print 'check model gradient'
-            #model.check_gradient()
-            optimizer.step()
-
-            # test converge.
-            #break
-        #break
-
-
-
+    print count, correct, error
+    print 'P=%.2f%%, R=%.2f%%' % (correct*100./(correct+error), correct*100./count)
 
 
 
