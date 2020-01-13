@@ -63,19 +63,26 @@ class Encoder(torch.nn.Module):
         self.__vocab_size = vocab_size
         self.__emb_size = emb_size
         self.__hidden_size = hidden_size
+        self.__layer_num = 3
 
         self.__emb = torch.nn.Embedding(vocab_size, emb_size)
-        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3, batch_first=True)
-        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=3, batch_first=True)
-        self.__fc = torch.nn.Linear(hidden_size, 3)
+        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
+        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
+        self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3)
 
     def forward(self, question_tokens, context_tokens):
         q_emb = self.__emb(question_tokens)
         c_emb = self.__emb(context_tokens)
             
         _, q_hidden = self.__question_rnn(q_emb)
-        out, _ = self.__context_rnn(c_emb, q_hidden)
-        out = self.__fc(out)
+        context_out, _ = self.__context_rnn(c_emb, q_hidden)
+        # need to cross.
+        seq_len = context_out.shape[1] # batch, seq_len, 3
+        c = q_hidden[0].expand( (seq_len, -1, -1, -1))
+        c = c.permute((2, 0, 1, 3))
+        c = c.reshape( (-1, seq_len, self.__layer_num*self.__hidden_size) )
+        concat_out = torch.cat((context_out, c), dim=2)
+        out = self.__fc(concat_out)
         return out
 
 if __name__=='__main__':
@@ -153,12 +160,15 @@ if __name__=='__main__':
 
 
     # hyper-param.
-    batch_size = 8
+    batch_size = 32
     input_emb_size = 32
     hidden_size = 128
 
     # make model.
     model = Encoder(ider.size(), input_emb_size, hidden_size)
+
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     def make_packed_pad_sequence(data):
         return rnn_utils.pack_padded_sequence(
@@ -169,22 +179,25 @@ if __name__=='__main__':
             )
 
     for epoch in range(10):
+        print 'Epoch %d' % epoch
         for s in range(0, len(train_question), batch_size):
+            optimizer.zero_grad()
+
             batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
             batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
 
-            print batch_question_ids
-            print batch_context_ids
-
-            #batch_context_output = torch.tensors()
+            temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
+            batch_context_output = torch.tensor(temp_output)
+            #print batch_context_output
 
             y = model(batch_question_ids, batch_context_ids)
-            print y.shape
-            #loss = criterion(batch_context_output, y)
-            #opt.step()
-            break
+            #print y.shape
+            #print batch_context_output.shape
+            loss = criterion(y.view(-1,3), batch_context_output.view(-1))
+            loss.backward()
+            print loss
+            optimizer.step()
 
-        break
 
 
 
