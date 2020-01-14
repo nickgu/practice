@@ -7,6 +7,7 @@ import torch
 import torchtext 
 import torch.nn.utils.rnn as rnn_utils
 import sys
+import tqdm
 
 class RNN(torch.nn.Module):
     def __init__(self, vocab_size=256, emb_size=16, hidden_size=16, class_num=2):
@@ -37,13 +38,16 @@ if __name__=='__main__':
             - sequence of random char (in a-z)
             - label: if the char of previous is the same, label 1.
     '''
+    cuda = torch.device('cuda')     # Default CUDA device
     
-    batch_size = 100
+    epoch_count = 200
+    data_size = 500
+    batch_size = 16
     length = 64
-    vocab_size = 16
-    train_x = torch.randint(vocab_size, [batch_size, length])
+    vocab_size = 32
+    train_x = torch.randint(vocab_size, [data_size, length])
     train_y = []
-    for b in range(batch_size):
+    for b in range(data_size):
         t = []
         for i in range(length):
             if train_x[b][i] == train_x[b][i-1]:
@@ -53,27 +57,30 @@ if __name__=='__main__':
         train_y.append(t)
     train_y = torch.tensor(train_y)
 
-    print train_x
-    print train_y
-
     # make model.
     model = RNN()
+    #model.to(cuda)
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    data_set = torch.utils.data.TensorDataset(train_x, train_y) 
+    data_loader = torch.utils.data.DataLoader(data_set, batch_size=batch_size, shuffle=True)
 
-
-    for epoch in range(200):
+    print 'load data over'
+    for epoch in range(epoch_count):
         print 'Epoch %d' % epoch
-        #test_code()
-
-        optimizer.zero_grad()
-        y = model(train_x)
-        loss = criterion(y.view(-1,2), train_y.view(-1))
-        loss.backward()
-        print 'loss', loss
-        optimizer.step()
-
+        all_loss = 0
+        batch_count = 0
+        bar = tqdm.tqdm(data_loader)
+        for x, y in bar:
+            optimizer.zero_grad()
+            y = model(train_x)
+            loss = criterion(y.view(-1,2), train_y.view(-1))
+            loss.backward()
+            all_loss += loss
+            batch_count += 1
+            bar.set_description('loss=%f' % (all_loss / batch_count) )
+            optimizer.step()
 
     # test code.
     count = 0
