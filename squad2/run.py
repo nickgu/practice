@@ -66,14 +66,15 @@ class Encoder(torch.nn.Module):
         self.__layer_num = 1
 
         self.__emb = torch.nn.Embedding(vocab_size, emb_size)
-        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
-        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True)
+        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
+        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
         #self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3)
-        self.__fc = torch.nn.Linear(self.__hidden_size, 3)
+        self.__fc = torch.nn.Linear(self.__hidden_size, 3).cuda()
 
     def forward(self, question_tokens, context_tokens):
         #q_emb = self.__emb(question_tokens)
         c_emb = self.__emb(context_tokens)
+        c_emb = c_emb.cuda()
             
         #_, q_hidden = self.__question_rnn(q_emb)
         #context_out, _ = self.__context_rnn(c_emb, q_hidden)
@@ -173,9 +174,8 @@ if __name__=='__main__':
 
     print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
-
     # hyper-param.
-    batch_size = 1
+    batch_size = 32
     input_emb_size = 8
     hidden_size = 8
 
@@ -183,7 +183,7 @@ if __name__=='__main__':
     model = Encoder(ider.size(), input_emb_size, hidden_size)
 
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     def make_packed_pad_sequence(data):
         return rnn_utils.pack_padded_sequence(
@@ -195,7 +195,7 @@ if __name__=='__main__':
 
     def test_code():
         # test code.
-        test_size = 1
+        test_size = batch_size
         batch_question_ids = rnn_utils.pad_sequence(train_question[:test_size], batch_first=True)
         batch_context_ids = rnn_utils.pad_sequence(train_context[:test_size], batch_first=True)
 
@@ -205,11 +205,11 @@ if __name__=='__main__':
 
         print train_answer_range[:test_size]
 
-    for epoch in range(50):
-        print 'Epoch %d' % epoch
-        test_code()
+    for epoch in range(300):
+        #print 'Epoch %d' % epoch
+        #test_code()
         #for s in range(0, len(train_question), batch_size):
-        for s in range(0, 1, batch_size):
+        for s in range(0, batch_size, batch_size):
             optimizer.zero_grad()
 
             batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
@@ -221,15 +221,7 @@ if __name__=='__main__':
             y = model(batch_question_ids, batch_context_ids)
 
             p = y.softmax(dim=2)
-            print p[0][50]
-            print p[0][53]
-            print batch_context_output[0][50]
-            print batch_context_output[0][53]
-
             y = y.view(-1, 3)
-            y_ = torch.randint(3, [32*205])
-
-
 
             #print 'check model gradient'
             #model.check_gradient()
@@ -248,6 +240,7 @@ if __name__=='__main__':
         #break
 
 
+    test_code()
 
 
 
