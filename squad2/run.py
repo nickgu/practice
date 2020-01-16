@@ -69,8 +69,13 @@ class Encoder(torch.nn.Module):
         self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
         self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
 
-        self.__fc = torch.nn.Linear(self.__hidden_size, 3).cuda()
-        #self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3).cuda()
+        # predictor of position-start.
+        self.__start_fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 32).cuda()
+        self.__start_fc_2 = torch.nn.Linear(32, 2).cuda()
+
+        # predictor of position-end.
+        self.__end_fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 32).cuda()
+        self.__end_fc_2 = torch.nn.Linear(32, 2).cuda()
 
     def forward(self, question_tokens, context_tokens):
         q_emb = self.__emb(question_tokens).cuda()
@@ -78,22 +83,26 @@ class Encoder(torch.nn.Module):
 
         _, (q_hidden, q_gate) = self.__question_rnn(q_emb)
         context_out, _ = self.__context_rnn(c_emb, (q_hidden, q_gate))
-        #print context_out.shape
-        out = self.__fc(context_out)
-        #print out.shape
-        return out
 
-        '''
-        context_out, _ = self.__context_rnn(c_emb)
-        # need to cross.
         seq_len = context_out.shape[1] # batch, seq_len, 3
-        c = q_hidden[0].expand( (seq_len, -1, -1, -1))
-        c = c.permute((2, 0, 1, 3))
-        c = c.reshape( (-1, seq_len, self.__layer_num*self.__hidden_size) )
+
+        # expand last layer.
+        c = q_hidden[-1].expand( (seq_len, -1, -1))
+        c = c.permute((1, 0, 2))
+        c = c.reshape( (-1, seq_len, self.__hidden_size) )
         concat_out = torch.cat((context_out, c), dim=2)
-        out = self.__fc(concat_out)
+
+        y_start = self.__start_fc(concat_out)
+        y_start = torch.relu(y_start)
+        y_start = self.__start_fc_2(y_start)
+
+        y_end = self.__end_fc(concat_out)
+        y_end = torch.relu(y_end)
+        y_end = self.__end_fc_2(y_end)
+
+        print y_start.shape
+        print y_end.shape
         return out
-        '''
 
     def check_gradient(self):
         for p in self.__fc.parameters():
@@ -175,9 +184,10 @@ if __name__=='__main__':
     print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
     # hyper-param.
-    batch_size = 16
-    input_emb_size = 8
-    hidden_size = 8
+    epoch_count=1000
+    batch_size = 32
+    input_emb_size = 16
+    hidden_size = 16
 
     # make model.
     model = Encoder(ider.size(), input_emb_size, hidden_size)
@@ -185,6 +195,7 @@ if __name__=='__main__':
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
+    '''
     def make_packed_pad_sequence(data):
         return rnn_utils.pack_padded_sequence(
                 rnn_utils.pad_sequence(data, batch_first=True), 
@@ -192,6 +203,7 @@ if __name__=='__main__':
                 batch_first=True, 
                 enforce_sorted=False
             )
+    '''
 
     def test_code():
         # test code.
@@ -207,6 +219,7 @@ if __name__=='__main__':
             count = 0
             correct = 0
             for (a,b), (c,d) in zip(ans[:, 1:].tolist(), train_answer_range[:test_size]):
+                print a,c,b,d
                 count += 2
                 if a==c:
                     correct += 1
@@ -215,7 +228,7 @@ if __name__=='__main__':
 
             print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
 
-    for epoch in range(500):
+    for epoch in range(epoch_count):
         #print 'Epoch %d' % epoch
         #test_code()
         #for s in range(0, len(train_question), batch_size):
