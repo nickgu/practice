@@ -68,20 +68,20 @@ class Encoder(torch.nn.Module):
         self.__emb = torch.nn.Embedding(vocab_size, emb_size)
         self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
         self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
-        #self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3)
+
         self.__fc = torch.nn.Linear(self.__hidden_size, 3).cuda()
+        #self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size * self.__layer_num, 3).cuda()
 
     def forward(self, question_tokens, context_tokens):
-        #q_emb = self.__emb(question_tokens)
-        c_emb = self.__emb(context_tokens)
-        c_emb = c_emb.cuda()
-            
-        #_, q_hidden = self.__question_rnn(q_emb)
-        #context_out, _ = self.__context_rnn(c_emb, q_hidden)
+        q_emb = self.__emb(question_tokens).cuda()
+        c_emb = self.__emb(context_tokens).cuda()
 
-        context_out, _ = self.__context_rnn(c_emb)
-        return self.__fc(context_out)
-
+        _, (q_hidden, q_gate) = self.__question_rnn(q_emb)
+        context_out, _ = self.__context_rnn(c_emb, (q_hidden, q_gate))
+        #print context_out.shape
+        out = self.__fc(context_out)
+        #print out.shape
+        return out
 
         '''
         context_out, _ = self.__context_rnn(c_emb)
@@ -175,7 +175,7 @@ if __name__=='__main__':
     print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
     # hyper-param.
-    batch_size = 32
+    batch_size = 16
     input_emb_size = 8
     hidden_size = 8
 
@@ -195,17 +195,27 @@ if __name__=='__main__':
 
     def test_code():
         # test code.
-        test_size = batch_size
-        batch_question_ids = rnn_utils.pad_sequence(train_question[:test_size], batch_first=True)
-        batch_context_ids = rnn_utils.pad_sequence(train_context[:test_size], batch_first=True)
+        with torch.no_grad():
+            test_size = batch_size
+            batch_question_ids = rnn_utils.pad_sequence(train_question[:test_size], batch_first=True)
+            batch_context_ids = rnn_utils.pad_sequence(train_context[:test_size], batch_first=True)
 
-        y = model(batch_question_ids, batch_context_ids)
-        p = y.softmax(dim=2)
-        print p.permute((0,2,1)).max(dim=2)
+            y = model(batch_question_ids, batch_context_ids)
+            p = y.softmax(dim=2)
+            ans = p.permute((0,2,1)).max(dim=2).indices
 
-        print train_answer_range[:test_size]
+            count = 0
+            correct = 0
+            for (a,b), (c,d) in zip(ans[:, 1:].tolist(), train_answer_range[:test_size]):
+                count += 2
+                if a==c:
+                    correct += 1
+                if b==d:
+                    correct += 1
 
-    for epoch in range(300):
+            print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
+
+    for epoch in range(500):
         #print 'Epoch %d' % epoch
         #test_code()
         #for s in range(0, len(train_question), batch_size):
@@ -216,7 +226,7 @@ if __name__=='__main__':
             batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
 
             temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
-            batch_context_output = torch.tensor(temp_output)
+            batch_context_output = torch.tensor(temp_output).cuda()
 
             y = model(batch_question_ids, batch_context_ids)
 
