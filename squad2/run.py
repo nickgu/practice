@@ -143,6 +143,7 @@ if __name__=='__main__':
         else:
             context_tokens = tokenizer(context)
 
+        context_tokens.append('<end>')
         question_tokens = tokenizer(question)
 
         # question_tokens, context_tokens, context_output(0,1,2)
@@ -155,7 +156,7 @@ if __name__=='__main__':
             c_ids.append( ider.add(tok) )
             if idx == answer_token_first:
                 c_out.append(1)
-            elif idx == answer_token_last:
+            elif idx-1 == answer_token_last:
                 c_out.append(2)
             else:
                 c_out.append(0)
@@ -212,7 +213,7 @@ if __name__=='__main__':
                 count += 2
                 if a==c:
                     correct += 1
-                if b==d:
+                if b-1==d:
                     correct += 1
 
             print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
