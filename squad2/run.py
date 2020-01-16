@@ -69,13 +69,10 @@ class Encoder(torch.nn.Module):
         self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
         self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
 
-        # predictor of position-start.
-        self.__start_fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 32).cuda()
-        self.__start_fc_2 = torch.nn.Linear(32, 2).cuda()
+        #self.__fc = torch.nn.Linear(self.__hidden_size, 3).cuda()
+        self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 32).cuda()
+        self.__fc_2 = torch.nn.Linear(32, 3).cuda()
 
-        # predictor of position-end.
-        self.__end_fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 32).cuda()
-        self.__end_fc_2 = torch.nn.Linear(32, 2).cuda()
 
     def forward(self, question_tokens, context_tokens):
         q_emb = self.__emb(question_tokens).cuda()
@@ -91,17 +88,9 @@ class Encoder(torch.nn.Module):
         c = c.permute((1, 0, 2))
         c = c.reshape( (-1, seq_len, self.__hidden_size) )
         concat_out = torch.cat((context_out, c), dim=2)
-
-        y_start = self.__start_fc(concat_out)
-        y_start = torch.relu(y_start)
-        y_start = self.__start_fc_2(y_start)
-
-        y_end = self.__end_fc(concat_out)
-        y_end = torch.relu(y_end)
-        y_end = self.__end_fc_2(y_end)
-
-        print y_start.shape
-        print y_end.shape
+        out = self.__fc(concat_out)
+        out = torch.relu(out)
+        out = self.__fc_2(out)
         return out
 
     def check_gradient(self):
