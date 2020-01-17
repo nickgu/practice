@@ -102,7 +102,7 @@ class Encoder(torch.nn.Module):
             print p.grad
         '''
 
-def load_data(reader):
+def load_data(reader, ider):
     question_tids = []
     context_tids = []
     output = []
@@ -113,6 +113,11 @@ def load_data(reader):
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
         ans_start = -1
         ans_text = 'none'
+
+        # ignore impossible first.
+        if is_impossible:
+            continue
+
         if not is_impossible:
             ans_start = ans[0]['answer_start']
             ans_text = ans[0]['text']
@@ -158,9 +163,34 @@ def load_data(reader):
         question_tids.append(torch.tensor(q_ids))
         context_tids.append(torch.tensor(c_ids))
         output.append(torch.tensor(c_out))
-        answer_range.append( (answer_token_first, answer_token_last) )
+        answer_range.append( (answer_token_begin, answer_token_end) )
 
     return question_tids, context_tids, output, answer_range
+
+def test(model, ques_tids, cont_tids, output, answer_range):
+    # test code.
+    batch_size = 128
+    with torch.no_grad():
+        count = 0
+        correct = 0
+
+        for s in range(0, len(ques_tids), batch_size):
+            batch_question_ids = rnn_utils.pad_sequence(ques_tids[s:s+batch_size], batch_first=True)
+            batch_context_ids = rnn_utils.pad_sequence(cont_tids[s:s+batch_size], batch_first=True)
+
+            y = model(batch_question_ids, batch_context_ids)
+            p = y.softmax(dim=2)
+            ans = p.permute((0,2,1)).max(dim=2).indices
+
+            for idx, ((a,b), (c,d)) in enumerate(zip(ans[:, 1:].tolist(), answer_range[s:s+batch_size])):
+                count += 2
+                if a==c:
+                    correct += 1
+                if b==d:
+                    correct += 1
+
+        print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
+
 
 if __name__=='__main__':
     data_path = '../dataset/squad2/'
@@ -179,71 +209,15 @@ if __name__=='__main__':
     print ider.size()
     '''
 
-    train_ques_tids, train_cont_tids, train_output, train_answer_range = load_data(train_reader)
-    test_ques_tids, test_cont_
-
-    question_tokens = []
-    train_context = []
-    train_output = []
-    train_answer_range = []
-    all_question_tokens = []
-    all_context_tokens = []
-
-    for title, context, qid, question, ans, is_impossible in train_reader.iter_instance():
-        ans_start = -1
-        ans_text = 'none'
-        if not is_impossible:
-            ans_start = ans[0]['answer_start']
-            ans_text = ans[0]['text']
-
-        context_tokens = []
-        answer_token_first = -1
-        answer_token_last = -1
-
-        if context[ans_start:ans_start+len(ans_text)] == ans_text:
-            a = context[:ans_start]
-            b = context[ans_start : ans_start + len(ans_text)]
-            c = context[ans_start+len(ans_text):]
-
-            context_tokens += tokenizer(a)
-            answer_token_first = len(context_tokens)
-            context_tokens += tokenizer(b)
-            answer_token_last = len(context_tokens)-1
-            context_tokens += tokenizer(c)
-        else:
-            context_tokens = tokenizer(context)
-
-        context_tokens.append('<end>')
-        question_tokens = tokenizer(question)
-
-        all_context_tokens.append( context_tokens )
-        all_question_tokens.append( question_tokens )
-
-        # question_tokens, context_tokens, context_output(0,1,2)
-        q_ids = []
-        c_ids = []
-        c_out = []
-        for tok in question_tokens:
-            q_ids.append( ider.add(tok) )
-        for idx, tok in enumerate(context_tokens):
-            c_ids.append( ider.add(tok) )
-            if idx == answer_token_first:
-                c_out.append(1)
-            elif idx-1 == answer_token_last:
-                c_out.append(2)
-            else:
-                c_out.append(0)
-
-        train_question.append(torch.tensor(q_ids))
-        train_context.append(torch.tensor(c_ids))
-        train_output.append(torch.tensor(c_out))
-        train_answer_range.append( (answer_token_first, answer_token_last) )
-
+    train_ques_tids, train_cont_tids, train_output, train_answer_range = load_data(train_reader, ider)
+    print >> sys.stderr, 'load train over'
+    test_ques_tids, test_cont_tids, test_output, test_answer_range = load_data(test_reader, ider)
+    print >> sys.stderr, 'load test over'
     print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
     # hyper-param.
-    epoch_count=500
-    batch_size = 32
+    epoch_count=400
+    batch_size = 128
     input_emb_size = 16
     hidden_size = 32
 
@@ -253,52 +227,17 @@ if __name__=='__main__':
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 10., 10.]).cuda())
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    '''
-    def make_packed_pad_sequence(data):
-        return rnn_utils.pack_padded_sequence(
-                rnn_utils.pad_sequence(data, batch_first=True), 
-                lengths=(5,2,4), 
-                batch_first=True, 
-                enforce_sorted=False
-            )
-    '''
-
-    def test_code():
-        # test code.
-        with torch.no_grad():
-            count = 0
-            correct = 0
-
-            for s in range(0, len(train_question), batch_size):
-                batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
-                batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
-
-                y = model(batch_question_ids, batch_context_ids)
-                p = y.softmax(dim=2)
-                ans = p.permute((0,2,1)).max(dim=2).indices
-
-                for idx, ((a,b), (c,d)) in enumerate(zip(ans[:, 1:].tolist(), train_answer_range[s:s+batch_size])):
-                    print a,c,'(%d)'%(a==c),b-1,d,'(%d)'%(b-1==d)
-                    print all_context_tokens[idx][a:b]
-                    print all_context_tokens[idx][c:d+1]
-                    count += 2
-                    if a==c:
-                        correct += 1
-                    if b-1==d:
-                        correct += 1
-
-            print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
-
+    # training phase.
     for epoch in range(epoch_count):
         print 'Epoch %d' % epoch
         loss = 0 
         step = 0
-        bar = tqdm.tqdm(range(0, len(train_question), batch_size))
+        bar = tqdm.tqdm(range(0, len(train_ques_tids), batch_size))
         for s in bar:
             optimizer.zero_grad()
 
-            batch_question_ids = rnn_utils.pad_sequence(train_question[s:s+batch_size], batch_first=True)
-            batch_context_ids = rnn_utils.pad_sequence(train_context[s:s+batch_size], batch_first=True)
+            batch_question_ids = rnn_utils.pad_sequence(train_ques_tids[s:s+batch_size], batch_first=True)
+            batch_context_ids = rnn_utils.pad_sequence(train_cont_tids[s:s+batch_size], batch_first=True)
 
             temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
             batch_context_output = torch.tensor(temp_output).cuda()
@@ -315,7 +254,9 @@ if __name__=='__main__':
             loss += l
             bar.set_description('loss=%.5f' % (loss / step))
 
-    test_code()
+        if (epoch+1) % 5 ==0:
+            test(model, train_ques_tids, train_cont_tids, train_output, train_answer_range)
+            test(model, test_ques_tids, test_cont_tids, test_output, test_answer_range)
 
 
 
