@@ -167,7 +167,7 @@ def load_data(reader, ider):
 
     return question_tids, context_tids, output, answer_range
 
-def test(model, ques_tids, cont_tids, output, answer_range):
+def test(model, ques_tids, cont_tids, output, answer_range, logger=None):
     # test code.
     batch_size = 128
     with torch.no_grad():
@@ -190,7 +190,8 @@ def test(model, ques_tids, cont_tids, output, answer_range):
                     correct += 1
 
         print 'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
-
+        if logger:
+            print >> logger,'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
 
 if __name__=='__main__':
     data_path = '../dataset/squad2/'
@@ -225,7 +226,9 @@ if __name__=='__main__':
     model = Encoder(ider.size(), input_emb_size, hidden_size)
 
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 10., 10.]).cuda())
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    logger = file('log.txt', 'w')
 
     # training phase.
     for epoch in range(epoch_count):
@@ -255,8 +258,9 @@ if __name__=='__main__':
             bar.set_description('loss=%.5f' % (loss / step))
 
         if (epoch+1) % 5 ==0:
-            test(model, train_ques_tids, train_cont_tids, train_output, train_answer_range)
-            test(model, test_ques_tids, test_cont_tids, test_output, test_answer_range)
+            print >> logger, 'Epoch %d:' % epoch
+            test(model, train_ques_tids, train_cont_tids, train_output, train_answer_range, logger)
+            test(model, test_ques_tids, test_cont_tids, test_output, test_answer_range, logger)
 
 
 
