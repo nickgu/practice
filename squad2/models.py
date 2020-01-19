@@ -80,7 +80,7 @@ class V1_CatLstm(torch.nn.Module):
     def forward(self, q_emb, c_emb):
 
         _, (q_hidden, q_gate) = self.__question_rnn(q_emb)
-        context_out, _ = self.__context_rnn(c_emb, (q_hidden, q_gate))
+        context_out, _ = self.__context_rnn(c_emb)
 
         seq_len = context_out.shape[1] # batch, seq_len, 3
 
@@ -95,7 +95,8 @@ class V1_CatLstm(torch.nn.Module):
         return out
 
     def check_gradient(self):
-        pass
+        for p in self.__question_rnn.parameters():
+            print p.grad
 
 if __name__=='__main__':
     pass
