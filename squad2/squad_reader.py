@@ -72,6 +72,136 @@ def list_titles(reader):
     for title, doc in reader.iter_doc():
         print title.encode('gb18030') + ' (%s)' % len(doc)
 
+def load_data(reader, ider):
+    question_tids = []
+    context_tids = []
+    output = []
+    answer_range = []
+    #all_question_tokens = []
+    #all_context_tokens = []
+
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        ans_start = -1
+        ans_text = 'none'
+
+        # ignore impossible first.
+        if is_impossible:
+            continue
+
+        if not is_impossible:
+            ans_start = ans[0]['answer_start']
+            ans_text = ans[0]['text']
+
+        context_tokens = []
+        answer_token_begin = -1
+        answer_token_end = -1
+
+        if context[ans_start:ans_start+len(ans_text)] == ans_text:
+            a = context[:ans_start]
+            b = context[ans_start : ans_start + len(ans_text)]
+            c = context[ans_start+len(ans_text):]
+
+            context_tokens += tokenizer(a)
+            answer_token_begin = len(context_tokens)
+            context_tokens += tokenizer(b)
+            answer_token_end = len(context_tokens)
+            context_tokens += tokenizer(c)
+        else:
+            context_tokens = tokenizer(context)
+
+        context_tokens.append('<end>')
+        question_tokens = tokenizer(question)
+
+        #all_context_tokens.append( context_tokens )
+        #all_question_tokens.append( question_tokens )
+
+        # question_tokens, context_tokens, context_output(0,1,2)
+        q_ids = []
+        c_ids = []
+        c_out = []
+        for tok in question_tokens:
+            q_ids.append( ider.add(tok) )
+        for idx, tok in enumerate(context_tokens):
+            c_ids.append( ider.add(tok) )
+            if idx == answer_token_begin:
+                c_out.append(1)
+            elif idx == answer_token_end:
+                c_out.append(2)
+            else:
+                c_out.append(0)
+
+        question_tids.append(torch.tensor(q_ids))
+        context_tids.append(torch.tensor(c_ids))
+        output.append(torch.tensor(c_out))
+        answer_range.append( (answer_token_begin, answer_token_end) )
+
+    return question_tids, context_tids, output, answer_range
+
+
+def load_data_embeddings(reader, vocab):
+    question_embs = []
+    context_embs = []
+    output = []
+    answer_range = []
+
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        ans_start = -1
+        ans_text = 'none'
+
+        # ignore impossible first.
+        if is_impossible:
+            continue
+
+        if not is_impossible:
+            ans_start = ans[0]['answer_start']
+            ans_text = ans[0]['text']
+
+        context_tokens = []
+        answer_token_begin = -1
+        answer_token_end = -1
+
+        if context[ans_start:ans_start+len(ans_text)] == ans_text:
+            a = context[:ans_start]
+            b = context[ans_start : ans_start + len(ans_text)]
+            c = context[ans_start+len(ans_text):]
+
+            context_tokens += tokenizer(a)
+            answer_token_begin = len(context_tokens)
+            context_tokens += tokenizer(b)
+            answer_token_end = len(context_tokens)
+            context_tokens += tokenizer(c)
+        else:
+            context_tokens = tokenizer(context)
+
+        context_tokens.append('<end>')
+        question_tokens = tokenizer(question)
+
+        #all_context_tokens.append( context_tokens )
+        #all_question_tokens.append( question_tokens )
+
+        # question_tokens, context_tokens, context_output(0,1,2)
+        q_embs = []
+        c_embs = []
+        c_out = []
+        for tok in question_tokens:
+            q_embs.append( vocab.get_vecs_by_token(tok) )
+        for idx, tok in enumerate(context_tokens):
+            c_embs.append( vocab.get_vecs_by_token(tok) )
+            if idx == answer_token_begin:
+                c_out.append(1)
+            elif idx == answer_token_end:
+                c_out.append(2)
+            else:
+                c_out.append(0)
+
+        question_embs.append(torch.tensor(q_embs))
+        context_embs.append(torch.tensor(c_embs))
+        output.append(torch.tensor(c_out))
+        answer_range.append( (answer_token_begin, answer_token_end) )
+
+    return question_embs, context_embs, output, answer_range
+
+
 if __name__=='__main__':
     import sys
     path = sys.argv[1]
