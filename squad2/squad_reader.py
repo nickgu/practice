@@ -72,7 +72,8 @@ def list_titles(reader):
     for title, doc in reader.iter_doc():
         print title.encode('gb18030') + ' (%s)' % len(doc)
 
-def load_data(reader, ider):
+def load_data(reader, tokenizer, ider):
+    import torch
     question_tids = []
     context_tids = []
     output = []
@@ -138,9 +139,10 @@ def load_data(reader, ider):
     return question_tids, context_tids, output, answer_range
 
 
-def load_data_embeddings(reader, vocab):
-    question_embs = []
-    context_embs = []
+def load_data_tokens(reader, tokenizer):
+    import torch
+    question_toks = []
+    context_toks = []
     output = []
     answer_range = []
 
@@ -180,13 +182,13 @@ def load_data_embeddings(reader, vocab):
         #all_question_tokens.append( question_tokens )
 
         # question_tokens, context_tokens, context_output(0,1,2)
-        q_embs = []
-        c_embs = []
+        qt = []
+        ct = []
         c_out = []
         for tok in question_tokens:
-            q_embs.append( vocab.get_vecs_by_token(tok) )
+            qt.append(tok)
         for idx, tok in enumerate(context_tokens):
-            c_embs.append( vocab.get_vecs_by_token(tok) )
+            ct.append(tok)
             if idx == answer_token_begin:
                 c_out.append(1)
             elif idx == answer_token_end:
@@ -194,12 +196,12 @@ def load_data_embeddings(reader, vocab):
             else:
                 c_out.append(0)
 
-        question_embs.append(torch.tensor(q_embs))
-        context_embs.append(torch.tensor(c_embs))
+        question_toks.append(qt)
+        context_toks.append(ct)
         output.append(torch.tensor(c_out))
         answer_range.append( (answer_token_begin, answer_token_end) )
 
-    return question_embs, context_embs, output, answer_range
+    return question_toks, context_toks, output, answer_range
 
 
 if __name__=='__main__':

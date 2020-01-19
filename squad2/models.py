@@ -77,7 +77,7 @@ class V1_CatLstm(torch.nn.Module):
         self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 128).cuda()
         self.__fc_2 = torch.nn.Linear(128, 3).cuda()
 
-    def forward(self, question_emb, context_emb):
+    def forward(self, q_emb, c_emb):
 
         _, (q_hidden, q_gate) = self.__question_rnn(q_emb)
         context_out, _ = self.__context_rnn(c_emb, (q_hidden, q_gate))
