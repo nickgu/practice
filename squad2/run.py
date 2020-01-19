@@ -67,6 +67,17 @@ def test_toks(model, ques_toks, cont_toks, output, answer_range, logger=None):
         if logger:
             print >> logger,'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
 
+def check_coverage(toks, vocab):
+    count = 0
+    hit = 0
+    for sentence in toks:
+        count += len(sentence)
+        m = vocab.get_vecs_by_tokens(sentence)
+        hit += len(filter(lambda x:x, [i.sum().abs()>1e-5 for i in m]))
+
+    print 'Vocab coverage: %.2f%% (%d/%d)' % (hit*100./count, hit, count)
+
+
 if __name__=='__main__':
     data_path = '../dataset/squad2/'
     train_filename = data_path + 'train-v2.0.json'
@@ -87,6 +98,11 @@ if __name__=='__main__':
     test_ques_toks, test_cont_toks, test_output, test_answer_range = squad_reader.load_data_tokens(test_reader, tokenizer)
     print >> sys.stderr, 'load test over'
     #print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
+
+    #check_coverage(train_ques_toks, vocab)
+    #check_coverage(train_cont_toks, vocab)
+    #check_coverage(test_ques_toks, vocab)
+    #check_coverage(test_cont_toks, vocab)
 
     # hyper-param.
     epoch_count=400

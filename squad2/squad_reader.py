@@ -17,7 +17,6 @@ def u2a(s):
         and c in all_letters
     )
 
-
 class SquadReader():
     def __init__(self, filename):
         self.__data = json.loads(file(filename).read())
