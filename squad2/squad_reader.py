@@ -138,7 +138,7 @@ def load_data(reader, tokenizer, ider):
     return question_tids, context_tids, output, answer_range
 
 
-def load_data_tokens(reader, tokenizer):
+def load_data_tokens(reader, tokenizer, limit_count=None):
     import torch
     question_toks = []
     context_toks = []
@@ -199,6 +199,11 @@ def load_data_tokens(reader, tokenizer):
         context_toks.append(ct)
         output.append(torch.tensor(c_out))
         answer_range.append( (answer_token_begin, answer_token_end) )
+        
+        if limit_count is not None:
+            limit_count -= 1
+            if limit_count <=0:
+                break
 
     return question_toks, context_toks, output, answer_range
 

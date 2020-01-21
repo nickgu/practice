@@ -64,8 +64,54 @@ class V1_CatLstm(torch.nn.Module):
         
         this model input wordemb and will not update it.
     '''
-    def __init__(self, emb_size, hidden_size, layer_num=3):
+    def __init__(self, emb_size, hidden_size, layer_num=3, dropout=0.2):
         super(V1_CatLstm, self).__init__()
+
+        self.__emb_size = emb_size
+        self.__hidden_size = hidden_size
+        self.__layer_num = layer_num
+
+        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
+                dropout=dropout, 
+                num_layers=self.__layer_num, 
+                batch_first=True, 
+                bidirectional=True).cuda()
+        #self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, dropout=dropout, num_layers=self.__layer_num, batch_first=True).cuda()
+
+        self.__fc = torch.nn.Linear(self.__hidden_size*2 + self.__hidden_size, 128).cuda()
+        self.__fc_2 = torch.nn.Linear(128, 3).cuda()
+
+    def forward(self, q_emb, c_emb):
+        #_, (q_hidden, q_gate) = self.__question_rnn(q_emb)
+        #context_out, _ = self.__context_rnn(c_emb)
+
+        _, (q_hidden, q_gate) = self.__rnn(q_emb)
+        context_out, _ = self.__rnn(c_emb)
+
+        seq_len = context_out.shape[1] # batch, seq_len, hidden*bi
+
+        # expand last layer.
+        c = q_hidden[-1].expand( (seq_len, -1, -1))
+        c = c.permute((1, 0, 2))
+        c = c.reshape( (-1, seq_len, self.__hidden_size) )
+        concat_out = torch.cat((context_out, c), dim=2)
+        out = self.__fc(concat_out)
+        out = torch.relu(out)
+        out = self.__fc_2(out)
+        return out
+
+    def check_gradient(self):
+        for p in self.__question_rnn.parameters():
+            print p.grad
+
+class V2_CatLstm_SoftmaxSeq(torch.nn.Module):
+    '''
+        lstm->concat(question_emb, context_emb)->fc x 2
+        
+        this model input wordemb and will not update it.
+    '''
+    def __init__(self, emb_size, hidden_size, layer_num=3):
+        super(V2_CatLstm_SoftmaxSeq, self).__init__()
 
         self.__emb_size = emb_size
         self.__hidden_size = hidden_size
@@ -75,7 +121,7 @@ class V1_CatLstm(torch.nn.Module):
         self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
 
         self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 128).cuda()
-        self.__fc_2 = torch.nn.Linear(128, 3).cuda()
+        self.__fc_2 = torch.nn.Linear(128, 2).cuda()
 
     def forward(self, q_emb, c_emb):
 
@@ -92,11 +138,41 @@ class V1_CatLstm(torch.nn.Module):
         out = self.__fc(concat_out)
         out = torch.relu(out)
         out = self.__fc_2(out)
+        out = out.permute((0, 2, 1))
+
         return out
 
     def check_gradient(self):
         for p in self.__question_rnn.parameters():
             print p.grad
+
+class V3_RNN_Dot(torch.nn.Module):
+    '''
+        lstm->concat(question_emb, context_emb)
+        
+        this model input wordemb and will not update it.
+    '''
+    def __init__(self, emb_size, layer_num=3, dropout=0.25):
+        super(V3_RNN_Dot, self).__init__()
+
+        self.__emb_size = emb_size
+        self.__layer_num = layer_num
+
+        self.__rnn = torch.nn.LSTM(emb_size, emb_size, dropout=dropout, num_layers=self.__layer_num, batch_first=True).cuda()
+
+    def forward(self, q_emb, c_emb):
+
+        _, (q_hidden, q_cell) = self.__rnn(q_emb)
+        context_out, _ = self.__rnn(c_emb)
+
+        seq_len = context_out.shape[1] # batch, seq_len, 3
+
+        print context_out.shape
+        print q_hidden[0].shape
+        attention = torch.matmul(context_out, q_hidden[0].unsqueeze(2)).squeeze()
+        print attention.shape
+        return attention
+
 
 if __name__=='__main__':
     pass

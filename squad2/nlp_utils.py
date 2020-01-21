@@ -53,6 +53,17 @@ def token2id(train_reader, test_reader, ider, tokenizer):
         for token in tokenizer(q):
             ider.add(token)
 
+
+class TokenEmbeddings:
+    def __init__(self):
+        self.__vocab = torchtext.vocab.GloVe(name='6B')
+        self.__char_emb = torchtext.vocab.CharNGram()
+
+    def get_vecs_by_tokens(self, tokens):
+        word_emb = self.__vocab.get_vecs_by_tokens(tokens)
+        char_emb = self.__char_emb.get_vecs_by_tokens(tokens).view(-1, 100)
+        return torch.cat((word_emb, char_emb), dim=1)
+
 def rand_init():
     return torch.randn(300) * 1e-3
 
