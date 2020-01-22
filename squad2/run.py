@@ -12,6 +12,9 @@ import tqdm
 import models
 import nlp_utils
 
+sys.path.append('../learn_pytorch')
+import easy_train
+
 
 def test(model, ques_tids, cont_tids, output, answer_range, batch_size, logger=None):
     # test code.
@@ -130,10 +133,10 @@ if __name__=='__main__':
     test_reader = squad_reader.SquadReader(test_filename)
 
     #train_ques_tids, train_cont_tids, train_output, train_answer_range = squad_reader.load_data(train_reader, tokenizer, ider)
-    train_ques_toks, train_cont_toks, train_output, train_answer_range = squad_reader.load_data_tokens(train_reader, tokenizer)
+    train_ques_toks, train_cont_toks, train_output, train_answer_range = squad_reader.load_data_tokens(train_reader, tokenizer, limit_count=None)
     print >> sys.stderr, 'load train over'
     #test_ques_tids, test_cont_tids, test_output, test_answer_range = squad_reader.load_data(test_reader, tokenizer, ider)
-    test_ques_toks, test_cont_toks, test_output, test_answer_range = squad_reader.load_data_tokens(test_reader, tokenizer)
+    test_ques_toks, test_cont_toks, test_output, test_answer_range = squad_reader.load_data_tokens(test_reader, tokenizer, limit_count=None)
     print >> sys.stderr, 'load test over'
     #print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
@@ -145,15 +148,17 @@ if __name__=='__main__':
 
     # hyper-param.
     epoch_count=400
-    batch_size = 128
+    batch_size = 64
     input_emb_size = 400
     hidden_size = 256
     layer_num = 2
 
     # make model.
     #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
-    model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    #model = models.V2_CatLstm_SoftmaxSeq(input_emb_size, hidden_size, layer_num=layer_num)
+    #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+
+    print ' == model_size: ', easy_train.model_params_size(model), ' =='
 
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
     #criterion = torch.nn.CrossEntropyLoss()

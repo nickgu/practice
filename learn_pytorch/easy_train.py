@@ -108,6 +108,9 @@ class SlotIndexCoder:
 
         return True
 
+def model_params_size(model):
+    return sum(x.numer() for x in model.parameters())
+
 def dump_embeddings(emb, fd):
     for emb in emb.weight:
         print >> fd, ','.join(map(lambda x:str(x), emb.tolist()))

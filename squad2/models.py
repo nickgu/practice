@@ -104,74 +104,60 @@ class V1_CatLstm(torch.nn.Module):
         for p in self.__question_rnn.parameters():
             print p.grad
 
-class V2_CatLstm_SoftmaxSeq(torch.nn.Module):
-    '''
-        lstm->concat(question_emb, context_emb)->fc x 2
-        
-        this model input wordemb and will not update it.
-    '''
-    def __init__(self, emb_size, hidden_size, layer_num=3):
-        super(V2_CatLstm_SoftmaxSeq, self).__init__()
+class V2_MatchAttention(torch.nn.Module):
+    def __init__(self, emb_size, hidden_size, layer_num=2, dropout=0.2):
+        super(V2_MatchAttention, self).__init__()
 
         self.__emb_size = emb_size
         self.__hidden_size = hidden_size
         self.__layer_num = layer_num
 
-        self.__question_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
-        self.__context_rnn = torch.nn.LSTM(emb_size, hidden_size, num_layers=self.__layer_num, batch_first=True).cuda()
+        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
+                dropout=dropout, 
+                num_layers=self.__layer_num, 
+                batch_first=True, 
+                bidirectional=True).cuda()
 
-        self.__fc = torch.nn.Linear(self.__hidden_size + self.__hidden_size, 128).cuda()
-        self.__fc_2 = torch.nn.Linear(128, 2).cuda()
+        # input_size:
+        #   hidden * 2 * 2
+        #       2: bi-directional 
+        #       2: (c_out + cq_attention)
+        self.__cross_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
+                dropout=dropout, 
+                num_layers=self.__layer_num, 
+                batch_first=True, 
+                bidirectional=True).cuda()
+
+        self.__fc = torch.nn.Linear(self.__hidden_size*2, 128).cuda()
+        self.__fc_2 = torch.nn.Linear(128, 3).cuda()
 
     def forward(self, q_emb, c_emb):
+        q_out, _ = self.__rnn(q_emb)
+        c_out, _ = self.__rnn(c_emb)
 
-        _, (q_hidden, q_gate) = self.__question_rnn(q_emb)
-        context_out, _ = self.__context_rnn(c_emb)
+        seq_len = c_out.shape[1] # batch, seq_len, hidden*bi
 
-        seq_len = context_out.shape[1] # batch, seq_len, 3
+        #print q_out.shape
+        #print c_out.shape
+        q_att = q_out.permute(0, 2, 1)
+        cq_att = c_out.bmm(q_att).softmax(dim=2)
+        #print cq_att.shape
+        cq_emb = torch.bmm(cq_att, q_out)
+        #print cq_emb.shape
+        cat_c_emb = torch.cat((c_out, cq_emb), dim=2)
+        c_final_output, _ = self.__cross_rnn(cat_c_emb)
 
-        # expand last layer.
-        c = q_hidden[-1].expand( (seq_len, -1, -1))
-        c = c.permute((1, 0, 2))
-        c = c.reshape( (-1, seq_len, self.__hidden_size) )
-        concat_out = torch.cat((context_out, c), dim=2)
-        out = self.__fc(concat_out)
+        out = self.__fc(c_final_output)
         out = torch.relu(out)
         out = self.__fc_2(out)
-        out = out.permute((0, 2, 1))
-
         return out
 
     def check_gradient(self):
+        pass
+        '''
         for p in self.__question_rnn.parameters():
             print p.grad
-
-class V3_RNN_Dot(torch.nn.Module):
-    '''
-        lstm->concat(question_emb, context_emb)
-        
-        this model input wordemb and will not update it.
-    '''
-    def __init__(self, emb_size, layer_num=3, dropout=0.25):
-        super(V3_RNN_Dot, self).__init__()
-
-        self.__emb_size = emb_size
-        self.__layer_num = layer_num
-
-        self.__rnn = torch.nn.LSTM(emb_size, emb_size, dropout=dropout, num_layers=self.__layer_num, batch_first=True).cuda()
-
-    def forward(self, q_emb, c_emb):
-
-        _, (q_hidden, q_cell) = self.__rnn(q_emb)
-        context_out, _ = self.__rnn(c_emb)
-
-        seq_len = context_out.shape[1] # batch, seq_len, 3
-
-        print context_out.shape
-        print q_hidden[0].shape
-        attention = torch.matmul(context_out, q_hidden[0].unsqueeze(2)).squeeze()
-        print attention.shape
-        return attention
+        '''
 
 
 if __name__=='__main__':
