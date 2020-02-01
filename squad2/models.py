@@ -137,14 +137,15 @@ class V2_MatchAttention(torch.nn.Module):
 
         seq_len = c_out.shape[1] # batch, seq_len, hidden*bi
 
-        #print q_out.shape
-        #print c_out.shape
-        q_att = q_out.permute(0, 2, 1)
-        cq_att = c_out.bmm(q_att).softmax(dim=2)
-        #print cq_att.shape
-        cq_emb = torch.bmm(cq_att, q_out)
-        #print cq_emb.shape
-        cat_c_emb = torch.cat((c_out, cq_emb), dim=2)
+        # get attention of each context_token on question.
+        q_att = q_out.permute(0, 2, 1) # batch, emb, qlen
+        cq_att = c_out.bmm(q_att).softmax(dim=2) # batch, clen, qlen
+
+        # (batch, clen, qlen) x (batch, qlen, emb) => (batch, clen, emb)
+        # add weighted q_emb to context.
+        cq_emb = torch.bmm(cq_att, q_out) 
+
+        cat_c_emb = torch.cat((c_out, cq_emb), dim=2) # batch, clen, (rnn_out_size + emb)
         c_final_output, _ = self.__cross_rnn(cat_c_emb)
 
         out = self.__fc(c_final_output)
@@ -158,6 +159,47 @@ class V2_MatchAttention(torch.nn.Module):
         for p in self.__question_rnn.parameters():
             print p.grad
         '''
+
+class V3_CrossConv(torch.nn.Module):
+    def __init__(self):
+        super(V3_CrossConv, self).__init__()
+
+        self.__Q_topk = 5
+
+        self.__conv1 = torch.nn.Conv2d(1, 8, kernel_size=5, padding=2)
+        self.__conv2 = torch.nn.Conv2d(8, 16, kernel_size=5, padding=2)
+
+        self.__fc = torch.nn.Linear(self.__Q_topk * 16, 128)
+        self.__fc2 = torch.nn.Linear(128, 3)
+        
+    def forward(self, q_emb, c_emb):
+        batch = c_emb.shape[0]
+        clen = c_emb.shape[1]
+
+        # bmm embeddings to get an similarity map.
+        cq_bmm = c_emb.bmm(q_emb.permute(0,2,1))
+
+        x = cq_bmm.unsqueeze(1)
+        x = self.__conv1(x) # batch, chan, clen, qlen
+        x = self.__conv2(x) # batch, chan, clen, qlen
+
+        # permute and flatten
+        x = x.permute(0,2,1,3)
+        x = x.topk(k=self.__Q_topk, dim=3).values
+        x = x.reshape(batch, clen, -1) # batch, clen,  Q_topk * chan
+
+        out = self.__fc(x)
+        out = torch.relu(out)
+        out = self.__fc2(out)
+        return out
+
+    def check_gradient(self):
+        pass
+        '''
+        for p in self.__question_rnn.parameters():
+            print p.grad
+        '''
+
 
 
 if __name__=='__main__':

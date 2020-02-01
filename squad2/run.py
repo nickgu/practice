@@ -14,7 +14,7 @@ import nlp_utils
 
 sys.path.append('../learn_pytorch')
 import easy_train
-
+import pydev
 
 def test(model, ques_tids, cont_tids, output, answer_range, batch_size, logger=None):
     # test code.
@@ -48,10 +48,12 @@ def test_toks(model, ques_toks, cont_toks, output, answer_range, batch_size, log
     with torch.no_grad():
         count = 0
         correct = 0
+        one_side_correct = 0
+        
         loss = 0 
         step = 0
 
-        for s in range(0, len(ques_toks), batch_size):
+        for s in tqdm.tqdm(range(0, len(ques_toks), batch_size)):
             batch_qt = ques_toks[s:s+batch_size]
             batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).cuda()
             batch_ct = cont_toks[s:s+batch_size]
@@ -78,15 +80,21 @@ def test_toks(model, ques_toks, cont_toks, output, answer_range, batch_size, log
             for idx, ((a,b), (c,d)) in enumerate(zip(ans[:, 1:].tolist(), answer_range[s:s+batch_size])):
             # for softmax on seq.
             #for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), answer_range[s:s+batch_size])):
-                count += 2
+                # test one side.
+                count += 1
+                if a==c or b==d:
+                    one_side_correct += 1
+
                 if a==c:
                     correct += 1
                 if b==d:
                     correct += 1
 
-        print 'Precise=%.2f%% (%d/%d), Loss=%.5f' % (correct*100./count, correct, count, loss/step)
+        print 'Precise=%.2f%% (%d/%d), one_side=%.2f%% Loss=%.5f' % (
+                correct*50./count, correct, count, one_side_correct*100./count, loss/step)
         if logger:
-            print >> logger, 'Precise=%.2f%% (%d/%d), Loss=%.5f' % (correct*100./count, correct, count, loss/step)
+            print >> logger, 'Precise=%.2f%% (%d/%d), one_side=%.2f%% Loss=%.5f' % (
+                    correct*50./count, correct, count, one_side_correct*100./count, loss/step)
 
 def check_coverage(toks, vocab):
     count = 0
@@ -115,6 +123,26 @@ def preheat(vocab, *args):
     print 'Pre-heat over', vocab.cache_size()
     
 if __name__=='__main__':
+    arg = pydev.Arg('SQuAD data training program with pytorch.')
+    arg.str_opt('epoch', 'e', default='200')
+    arg.str_opt('batch', 'b', default='64')
+    arg.str_opt('test_epoch', 't', default='5')
+    opt = arg.init_arg()
+
+
+    # hyper-param.
+    epoch_count = int(opt.epoch)
+    batch_size = int(opt.batch)
+    test_epoch = int(opt.test_epoch)
+
+    input_emb_size = 400
+    hidden_size = 256
+    layer_num = 2
+
+    print >> sys.stderr, 'epoch=%d' % epoch_count
+    print >> sys.stderr, 'test_epoch=%d' % test_epoch
+    print >> sys.stderr, 'batch_size=%d' % batch_size
+
     data_path = '../dataset/squad1/'
     train_filename = data_path + 'train-v1.1.json'
     test_filename = data_path + 'dev-v1.1.json'
@@ -146,17 +174,13 @@ if __name__=='__main__':
     #check_coverage(train_ques_toks, vocab)
     #check_coverage(test_ques_toks, vocab)
 
-    # hyper-param.
-    epoch_count=400
-    batch_size = 64
-    input_emb_size = 400
-    hidden_size = 256
-    layer_num = 2
 
     # make model.
     #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    #model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+
+    model = models.V3_CrossConv().cuda()
 
     print ' == model_size: ', easy_train.model_params_size(model), ' =='
 
@@ -209,15 +233,15 @@ if __name__=='__main__':
             bar.set_description('loss=%.5f' % (loss / step))
             #sys.exit(0)
 
-        if (epoch+1) % 3 ==0:
-            print >> logger, 'Epoch %d:' % epoch
-            #test(model, train_ques_tids, train_cont_tids, train_output, train_answer_range, logger)
-            #test(model, test_ques_tids, test_cont_tids, test_output, test_answer_range, logger)
+        if test_epoch>0:
+            if (epoch+1) % test_epoch ==0:
+                print >> logger, 'Epoch %d:' % epoch
+                #test(model, train_ques_tids, train_cont_tids, train_output, train_answer_range, logger)
+                #test(model, test_ques_tids, test_cont_tids, test_output, test_answer_range, logger)
 
-            test_toks(model, train_ques_toks, train_cont_toks, train_output, train_answer_range, batch_size, logger)
-            test_toks(model, test_ques_toks, test_cont_toks, test_output, test_answer_range, batch_size, logger)
+                test_toks(model, train_ques_toks, train_cont_toks, train_output, train_answer_range, batch_size, logger)
+                test_toks(model, test_ques_toks, test_cont_toks, test_output, test_answer_range, batch_size, logger)
 
-
-
-
+    test_toks(model, train_ques_toks, train_cont_toks, train_output, train_answer_range, batch_size, logger)
+    test_toks(model, test_ques_toks, test_cont_toks, test_output, test_answer_range, batch_size, logger)
 
