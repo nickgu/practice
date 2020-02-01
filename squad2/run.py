@@ -143,6 +143,21 @@ if __name__=='__main__':
     print >> sys.stderr, 'test_epoch=%d' % test_epoch
     print >> sys.stderr, 'batch_size=%d' % batch_size
 
+    # === Init Model ===
+    #
+    # make model.
+    #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
+    #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    #model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    #model = models.V3_CrossConv().cuda()
+    model = models.V4_Transformer(input_emb_size).cuda()
+
+    print ' == model_size: ', easy_train.model_params_size(model), ' =='
+    criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
+    #criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # === Init Data ===
     data_path = '../dataset/squad1/'
     train_filename = data_path + 'train-v1.1.json'
     test_filename = data_path + 'dev-v1.1.json'
@@ -174,19 +189,6 @@ if __name__=='__main__':
     #check_coverage(train_ques_toks, vocab)
     #check_coverage(test_ques_toks, vocab)
 
-
-    # make model.
-    #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
-    #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    #model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-
-    model = models.V3_CrossConv().cuda()
-
-    print ' == model_size: ', easy_train.model_params_size(model), ' =='
-
-    criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
-    #criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     logger = file('log.txt', 'w')
 

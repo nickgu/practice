@@ -105,6 +105,9 @@ class V1_CatLstm(torch.nn.Module):
             print p.grad
 
 class V2_MatchAttention(torch.nn.Module):
+    '''
+        ~50% on test 65% one-side
+    '''
     def __init__(self, emb_size, hidden_size, layer_num=2, dropout=0.2):
         super(V2_MatchAttention, self).__init__()
 
@@ -161,15 +164,28 @@ class V2_MatchAttention(torch.nn.Module):
         '''
 
 class V3_CrossConv(torch.nn.Module):
+    '''
+        not yet complete.
+    '''
     def __init__(self):
         super(V3_CrossConv, self).__init__()
 
         self.__Q_topk = 5
+        self.__conv_out_size=256
 
-        self.__conv1 = torch.nn.Conv2d(1, 8, kernel_size=5, padding=2)
-        self.__conv2 = torch.nn.Conv2d(8, 16, kernel_size=5, padding=2)
+        self.__conv_stack = torch.nn.Sequential(
+                torch.nn.Conv2d(1, 32, kernel_size=5, padding=2),
+                torch.nn.ReLU(),
+                torch.nn.Conv2d(32, 64, kernel_size=5, padding=2),
+                torch.nn.ReLU(),
+                torch.nn.Conv2d(64, 128, kernel_size=5, padding=2),
+                torch.nn.ReLU(),
+                torch.nn.Conv2d(128, self.__conv_out_size, kernel_size=5, padding=2),
+                torch.nn.ReLU(),
+                )
 
-        self.__fc = torch.nn.Linear(self.__Q_topk * 16, 128)
+
+        self.__fc = torch.nn.Linear(self.__Q_topk * self.__conv_out_size, 128)
         self.__fc2 = torch.nn.Linear(128, 3)
         
     def forward(self, q_emb, c_emb):
@@ -177,15 +193,16 @@ class V3_CrossConv(torch.nn.Module):
         clen = c_emb.shape[1]
 
         # bmm embeddings to get an similarity map.
-        cq_bmm = c_emb.bmm(q_emb.permute(0,2,1))
+        cq_bmm = c_emb.bmm(q_emb.permute(0,2,1)).topk(k=self.__Q_topk, dim=2).values
+
+        # batch, clen, emb+qlen
+        x = torch.cat((c_emb, cq_bmm), dim=2)
 
         x = cq_bmm.unsqueeze(1)
-        x = self.__conv1(x) # batch, chan, clen, qlen
-        x = self.__conv2(x) # batch, chan, clen, qlen
+        x = self.__conv_stack(x) # batch, chan, clen, emb+topk_sim
 
         # permute and flatten
         x = x.permute(0,2,1,3)
-        x = x.topk(k=self.__Q_topk, dim=3).values
         x = x.reshape(batch, clen, -1) # batch, clen,  Q_topk * chan
 
         out = self.__fc(x)
@@ -200,7 +217,41 @@ class V3_CrossConv(torch.nn.Module):
             print p.grad
         '''
 
+class V4_Transformer(torch.nn.Module):
+    def __init__(self, emb_size):
+        super(V4_Transformer, self).__init__()
 
+        self.__sentence_emb = 32
+
+        self.__type_q_emb = torch.autograd.Variable(torch.randn(self.__sentence_emb))
+        self.__type_c_emb = torch.autograd.Variable(torch.randn(self.__sentence_emb))
+
+        self.__dmodel = emb_size + self.__sentence_emb
+        layer = torch.nn.TransformerEncoderLayer(d_model=self.__dmodel, nhead=8)
+        self.__transformer = torch.nn.TransformerEncoder(layer, num_layers=4)
+
+        self.__fc = torch.nn.Linear(self.__dmodel, 128)
+        self.__fc2 = torch.nn.Linear(128, 3)
+        
+    def forward(self, q_emb, c_emb):
+        batch = c_emb.shape[0]
+        qlen = q_emb.shape[1]
+        clen = c_emb.shape[1]
+
+        qe = self.__type_q_emb.expand(batch, qlen, self.__sentence_emb).cuda()
+        ce = self.__type_c_emb.expand(batch, clen, self.__sentence_emb).cuda()
+        
+        q = torch.cat((q_emb, qe), dim=2)
+        c = torch.cat((c_emb, ce), dim=2)
+
+        x = torch.cat((q, c), dim=1)
+        x = self.__transformer(x)
+        x = x[:,qlen:,:]
+
+        out = self.__fc(x)
+        out = torch.relu(out)
+        out = self.__fc2(out)
+        return out
 
 if __name__=='__main__':
     pass
