@@ -115,9 +115,9 @@ def preheat(vocab, *args):
     print 'Pre-heat over', vocab.cache_size()
     
 if __name__=='__main__':
-    data_path = '../dataset/squad2/'
-    train_filename = data_path + 'train-v2.0.json'
-    test_filename = data_path + 'dev-v2.0.json'
+    data_path = '../dataset/squad1/'
+    train_filename = data_path + 'train-v1.1.json'
+    test_filename = data_path + 'dev-v1.1.json'
 
     tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
     #ider = nlp_utils.TokenID()

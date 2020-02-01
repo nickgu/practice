@@ -33,7 +33,7 @@ class SquadReader():
                     qid = qa['id']
                     question = qa['question']
                     ans = qa['answers']
-                    is_impossible = qa['is_impossible']
+                    is_impossible = qa.get('is_impossible', False)
                     yield title, context, qid, question, ans, is_impossible
 
     def iter_doc(self):
@@ -52,7 +52,7 @@ class SquadReader():
                     qid = qa['id']
                     question = qa['question']
                     ans = qa['answers']
-                    is_impossible = qa['is_impossible']
+                    is_impossible = qa.get('is_impossible', False)
                     yield qid, question, ans, is_impossible
 
 def count_tokens(reader):
