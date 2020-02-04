@@ -43,7 +43,7 @@ def test(model, ques_tids, cont_tids, output, answer_range, batch_size, logger=N
             print >> logger,'Precise=%.2f%% (%d/%d)' % (correct*100./count, correct, count)
 
 
-def test_toks(model, ques_toks, cont_toks, output, answer_range, batch_size, logger=None):
+def test_toks(model, ques_toks, cont_toks, output, binary_output, answer_range, batch_size, logger=None):
     # test code.
     with torch.no_grad():
         count = 0
@@ -60,19 +60,16 @@ def test_toks(model, ques_toks, cont_toks, output, answer_range, batch_size, log
             batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).cuda()
 
             y = model(batch_ques_emb, batch_cont_emb)
+            # triple.
             p = y.softmax(dim=2)
-            
             # for softmax on pos.
             ans = p.permute((0,2,1)).max(dim=2).indices
-            
-            # for softmax on seq.
-            #ans = p.max(dim=2).indices
-
             # accumulate loss.
             temp_output = rnn_utils.pad_sequence(output[s:s+batch_size], batch_first=True)
             batch_context_output = torch.tensor(temp_output).cuda()
             y = y.view(-1, 3)
             l = criterion(y.view(-1,3), batch_context_output.view([-1]))
+           
             step += 1
             loss += l
 
@@ -127,6 +124,7 @@ if __name__=='__main__':
     arg.str_opt('epoch', 'e', default='200')
     arg.str_opt('batch', 'b', default='64')
     arg.str_opt('test_epoch', 't', default='5')
+    arg.str_opt('logname', 'L', default='log.txt')
     opt = arg.init_arg()
 
 
@@ -136,31 +134,37 @@ if __name__=='__main__':
     test_epoch = int(opt.test_epoch)
 
     input_emb_size = 400
-    hidden_size = 256
-    layer_num = 2
 
     print >> sys.stderr, 'epoch=%d' % epoch_count
     print >> sys.stderr, 'test_epoch=%d' % test_epoch
     print >> sys.stderr, 'batch_size=%d' % batch_size
+    print >> sys.stderr, 'log_filename=%s' % opt.logname
+
 
     # === Init Model ===
     #
     # make model.
     #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    #model = models.V2_MatchAttention(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    model = models.V2_MatchAttention(input_emb_size).cuda()
+    #model = models.V2_1_BiDafLike(input_emb_size).cuda()
     #model = models.V3_CrossConv().cuda()
-    model = models.V4_Transformer(input_emb_size).cuda()
+    #model = models.V4_Transformer(input_emb_size).cuda()
 
     print ' == model_size: ', easy_train.model_params_size(model), ' =='
+    # for triple.
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
-    #criterion = torch.nn.CrossEntropyLoss()
+    # for binary.
+    #criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # === Init Data ===
     data_path = '../dataset/squad1/'
     train_filename = data_path + 'train-v1.1.json'
     test_filename = data_path + 'dev-v1.1.json'
+
+    print >> sys.stderr, 'train: [%s]' % train_filename
+    print >> sys.stderr, 'test: [%s]' % test_filename
 
     tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
     #ider = nlp_utils.TokenID()
@@ -176,10 +180,10 @@ if __name__=='__main__':
     test_reader = squad_reader.SquadReader(test_filename)
 
     #train_ques_tids, train_cont_tids, train_output, train_answer_range = squad_reader.load_data(train_reader, tokenizer, ider)
-    train_ques_toks, train_cont_toks, train_output, train_answer_range = squad_reader.load_data_tokens(train_reader, tokenizer, limit_count=None)
+    train_ques_toks, train_cont_toks, train_output, train_binary_output, train_answer_range = squad_reader.load_data_tokens(train_reader, tokenizer, limit_count=None)
     print >> sys.stderr, 'load train over'
     #test_ques_tids, test_cont_tids, test_output, test_answer_range = squad_reader.load_data(test_reader, tokenizer, ider)
-    test_ques_toks, test_cont_toks, test_output, test_answer_range = squad_reader.load_data_tokens(test_reader, tokenizer, limit_count=None)
+    test_ques_toks, test_cont_toks, test_output, test_binary_output, test_answer_range = squad_reader.load_data_tokens(test_reader, tokenizer, limit_count=None)
     print >> sys.stderr, 'load test over'
     #print >> sys.stderr, 'load data over (vocab=%d)' % (ider.size())
 
@@ -190,7 +194,7 @@ if __name__=='__main__':
     #check_coverage(test_ques_toks, vocab)
 
 
-    logger = file('log.txt', 'w')
+    logger = file(opt.logname, 'w')
 
     # training phase.
     for epoch in range(epoch_count):
@@ -210,7 +214,10 @@ if __name__=='__main__':
             #batch_question_ids = rnn_utils.pad_sequence(train_ques_tids[s:s+batch_size], batch_first=True)
             #batch_context_ids = rnn_utils.pad_sequence(train_cont_tids[s:s+batch_size], batch_first=True)
 
+            # triple.
             temp_output = rnn_utils.pad_sequence(train_output[s:s+batch_size], batch_first=True)
+            # binary
+            #temp_output = rnn_utils.pad_sequence(train_binary_output[s:s+batch_size], batch_first=True)
             batch_context_output = torch.tensor(temp_output).cuda()
 
             #y = model(batch_question_ids, batch_context_ids)
@@ -218,8 +225,12 @@ if __name__=='__main__':
             p = y.softmax(dim=2)
 
             # softmax on each pos.
+            # triple
             y = y.view(-1, 3)
             l = criterion(y.view(-1,3), batch_context_output.view([-1]))
+            # binary.
+            #y = y.view(-1, 2)
+            #l = criterion(y.view(-1,2), batch_context_output.view([-1]))
 
             # softmax on whole seq.
             #print p.shape
@@ -234,6 +245,8 @@ if __name__=='__main__':
             loss += l
             bar.set_description('loss=%.5f' % (loss / step))
             #sys.exit(0)
+
+        print >> logger, 'epoch=%d\tloss=%.5f' % (epoch, loss/step)
 
         if test_epoch>0:
             if (epoch+1) % test_epoch ==0:

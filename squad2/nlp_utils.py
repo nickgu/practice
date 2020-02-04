@@ -82,7 +82,9 @@ class TokenEmbeddings:
         return torch.stack(l)
 
     def get_vecs_by_tokens_inner(self, tokens):
+        # dim=300
         word_emb = self.__vocab.get_vecs_by_tokens(tokens)
+        # dim=100
         char_emb = self.__char_emb.get_vecs_by_tokens(tokens).view(-1, 100)
         return torch.cat((word_emb, char_emb), dim=1)
 

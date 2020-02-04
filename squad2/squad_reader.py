@@ -75,7 +75,8 @@ def load_data(reader, tokenizer, ider):
     import torch
     question_tids = []
     context_tids = []
-    output = []
+    output = [] #triple out
+    b_output = [] # binary out
     answer_range = []
     #all_question_tokens = []
     #all_context_tokens = []
@@ -119,23 +120,28 @@ def load_data(reader, tokenizer, ider):
         q_ids = []
         c_ids = []
         c_out = []
+        b_out = []
         for tok in question_tokens:
             q_ids.append( ider.add(tok) )
         for idx, tok in enumerate(context_tokens):
             c_ids.append( ider.add(tok) )
             if idx == answer_token_begin:
                 c_out.append(1)
+                b_out.append((1, 0))
             elif idx == answer_token_end:
                 c_out.append(2)
+                b_out.append((0, 1))
             else:
                 c_out.append(0)
+                b_out.append((0, 0))
 
         question_tids.append(torch.tensor(q_ids))
         context_tids.append(torch.tensor(c_ids))
         output.append(torch.tensor(c_out))
+        b_output.append(torch.tensor(b_out))
         answer_range.append( (answer_token_begin, answer_token_end) )
 
-    return question_tids, context_tids, output, answer_range
+    return question_tids, context_tids, output, b_output, answer_range
 
 
 def load_data_tokens(reader, tokenizer, limit_count=None):
@@ -143,6 +149,7 @@ def load_data_tokens(reader, tokenizer, limit_count=None):
     question_toks = []
     context_toks = []
     output = []
+    b_output = []
     answer_range = []
 
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
@@ -184,20 +191,25 @@ def load_data_tokens(reader, tokenizer, limit_count=None):
         qt = []
         ct = []
         c_out = []
+        b_out = []
         for tok in question_tokens:
             qt.append(tok)
         for idx, tok in enumerate(context_tokens):
             ct.append(tok)
             if idx == answer_token_begin:
                 c_out.append(1)
+                b_out.append((1, 0))
             elif idx == answer_token_end:
                 c_out.append(2)
+                b_out.append((0, 1))
             else:
                 c_out.append(0)
+                b_out.append((0, 0))
 
         question_toks.append(qt)
         context_toks.append(ct)
         output.append(torch.tensor(c_out))
+        b_output.append(torch.tensor(b_out))
         answer_range.append( (answer_token_begin, answer_token_end) )
         
         if limit_count is not None:
@@ -205,7 +217,7 @@ def load_data_tokens(reader, tokenizer, limit_count=None):
             if limit_count <=0:
                 break
 
-    return question_toks, context_toks, output, answer_range
+    return question_toks, context_toks, output, b_output, answer_range
 
 
 if __name__=='__main__':
