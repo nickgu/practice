@@ -164,7 +164,7 @@ class V2_MatchAttention(torch.nn.Module):
         out = self.__fc(x)
         out = torch.relu(out)
         out = self.__fc_2(out)
-        return out.softmax(-1)
+        return out
 
     def check_gradient(self):
         pass
@@ -238,7 +238,7 @@ class V2_MatchAttention_Binary(torch.nn.Module):
 
         out_start = self.__dense_start(x)
         out_end = self.__dense_end(x)
-        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 ).softmax(-1)
+        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
     def check_gradient(self):
         pass
