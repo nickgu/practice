@@ -88,6 +88,14 @@ class TokenEmbeddings:
         char_emb = self.__char_emb.get_vecs_by_tokens(tokens).view(-1, 100)
         return torch.cat((word_emb, char_emb), dim=1)
 
+# Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
+def u2a(s):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+        and c in all_letters
+    )
+
 def rand_init():
     return torch.randn(300) * 1e-3
 
