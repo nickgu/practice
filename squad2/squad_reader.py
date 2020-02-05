@@ -105,13 +105,13 @@ def load_data(reader, tokenizer, limit_count=None):
             ct.append(tok)
             if idx == answer_token_begin:
                 c_out.append(1)
-                b_out.append((1, 0))
+                b_out.append((1,0))
             elif idx == answer_token_end:
                 c_out.append(2)
-                b_out.append((0, 1))
+                b_out.append((0,1))
             else:
                 c_out.append(0)
-                b_out.append((0, 0))
+                b_out.append((0,0))
 
         squad_data.qtoks.append(qt)
         squad_data.ctoks.append(ct)

@@ -16,7 +16,41 @@ sys.path.append('../learn_pytorch')
 import easy_train
 import pydev
 
-def run_test(model, test, batch_size, logger=None):
+class RunTypeBinary:
+    def __init__(self):
+        self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
+
+    def loss(self, y, y_):
+        temp_output = rnn_utils.pad_sequence(y, batch_first=True)
+        batch_context_output = torch.tensor(temp_output).cuda()
+        l = self.__criterion(y_.view(-1,2), batch_context_output.view([-1]))
+        return l
+
+    def get_ans_range(self, y):
+        return y.permute(0,2,1,3)[:,:,:,1:].squeeze().max(dim=2).indices
+
+    def adjust_data(self, data):
+        data.output = data.binary_output
+          
+
+class RunTypeTriple:
+    def __init__(self):
+        self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
+
+    def loss(self, y, y_):
+        temp_output = rnn_utils.pad_sequence(y, batch_first=True)
+        batch_context_output = torch.tensor(temp_output).cuda()
+        l = self.__criterion(y_.view(-1,3), batch_context_output.view([-1]))
+        return l
+
+    def get_ans_range(self, y):
+        return y.permute((0,2,1)).max(dim=2).indices
+
+    def adjust_data(self, data):
+        data.output = data.triple_output
+
+
+def run_test(runtype, model, data, batch_size, logger=None):
     # test code.
     with torch.no_grad():
         count = 0
@@ -26,28 +60,25 @@ def run_test(model, test, batch_size, logger=None):
         loss = 0 
         step = 0
 
-        for s in tqdm.tqdm(range(0, len(test.qtoks), batch_size)):
-            batch_qt = test.qtoks[s:s+batch_size]
+        for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
+            batch_qt = data.qtoks[s:s+batch_size]
             batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).cuda()
-            batch_ct = test.ctoks[s:s+batch_size]
+            batch_ct = data.ctoks[s:s+batch_size]
             batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).cuda()
 
-            y = model(batch_ques_emb, batch_cont_emb)
-            # triple.
-            p = y.softmax(dim=2)
-            # for softmax on pos.
-            ans = p.permute((0,2,1)).max(dim=2).indices
-            # accumulate loss.
-            temp_output = rnn_utils.pad_sequence(test.triple_output[s:s+batch_size], batch_first=True)
-            batch_context_output = torch.tensor(temp_output).cuda()
-            y = y.view(-1, 3)
-            l = criterion(y.view(-1,3), batch_context_output.view([-1]))
-           
+            batch, clen, _ = batch_cont_emb.shape
+            y = rnn_utils.pad_sequence(data.output[s:s+batch_size], batch_first=True)
+
+            # triple output: (batch, clen, 3)
+            # binary output: (batch, clen, 2, 2)
+            y_ = model(batch_ques_emb, batch_cont_emb)
+
+            l = runtype.loss(y, y_)
             step += 1
             loss += l
 
-            # for softmax on pos.
-            for idx, ((a,b), (c,d)) in enumerate(zip(ans[:, 1:].tolist(), test.answer_range[s:s+batch_size])):
+            ans = runtype.get_ans_range(y_)
+            for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), data.answer_range[s:s+batch_size])):
                 # test one side.
                 count += 1
                 if a==c and b==d:
@@ -57,6 +88,7 @@ def run_test(model, test, batch_size, logger=None):
                     side_match += 1
                 if b==d:
                     side_match += 1
+
         info = 'EM=%.2f%% (%d/%d), one_side=%.2f%% Loss=%.5f' % (
                 exact_match*100./count, exact_match, count, 
                 side_match*50./count, loss/step)
@@ -115,20 +147,21 @@ if __name__=='__main__':
 
 
     # === Init Model ===
-    #
+    
+    #runtype = RunTypeTriple()
+    runtype = RunTypeBinary()
+
     # make model.
     #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    model = models.V2_MatchAttention(input_emb_size).cuda()
+    model = models.V2_MatchAttention_Binary(input_emb_size).cuda()
     #model = models.V2_1_BiDafLike(input_emb_size).cuda()
     #model = models.V3_CrossConv().cuda()
     #model = models.V4_Transformer(input_emb_size).cuda()
 
     print ' == model_size: ', easy_train.model_params_size(model), ' =='
     # for triple.
-    criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
-    # for binary.
-    #criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
+    # criterion init in runtype.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # === Init Data ===
@@ -150,8 +183,10 @@ if __name__=='__main__':
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
 
-    train = squad_reader.load_data(train_reader, tokenizer, limit_count=None)
-    test = squad_reader.load_data(test_reader, tokenizer, limit_count=None)
+    train = squad_reader.load_data(train_reader, tokenizer, limit_count=1000)
+    test = squad_reader.load_data(test_reader, tokenizer, limit_count=1000)
+    runtype.adjust_data(train)
+    runtype.adjust_data(test)
     print >> sys.stderr, 'Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks))
 
     # pre-heat.
@@ -175,28 +210,18 @@ if __name__=='__main__':
             batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).cuda()
             batch_start_end = torch.tensor(train.answer_range[s:s+batch_size]).cuda()
 
-            # triple.
-            temp_output = rnn_utils.pad_sequence(train.triple_output[s:s+batch_size], batch_first=True)
-            batch_context_output = torch.tensor(temp_output).cuda()
+            y = train.output[s:s+batch_size]
 
-            #y = model(batch_question_ids, batch_context_ids)
-            y = model(batch_ques_emb, batch_cont_emb)
-            p = y.softmax(dim=2)
-
-            # softmax on each pos.
-            # triple
-            y = y.view(-1, 3)
-            l = criterion(y.view(-1,3), batch_context_output.view([-1]))
-            # binary.
-            #y = y.view(-1, 2)
-            #l = criterion(y.view(-1,2), batch_context_output.view([-1]))
-
-            l.backward()
-            #model.check_gradient()
-            optimizer.step()
-
+            # triple output: (batch, clen, 3)
+            # binary output: (batch, clen, 2, 2)
+            y_ = model(batch_ques_emb, batch_cont_emb)
+            l = runtype.loss(y, y_)
             step += 1
             loss += l
+
+            l.backward()
+            optimizer.step()
+
             bar.set_description('loss=%.5f' % (loss / step))
 
         print >> logger, 'epoch=%d\tloss=%.5f' % (epoch, loss/step)
@@ -205,9 +230,9 @@ if __name__=='__main__':
             if (epoch+1) % test_epoch ==0:
                 print >> logger, 'Epoch %d:' % epoch
 
-                run_test(model, train, batch_size, logger)
-                run_test(model, test, batch_size, logger)
+                run_test(runtype, model, train, batch_size, logger)
+                run_test(runtype, model, test, batch_size, logger)
 
-    run_test(model, train, batch_size, logger)
-    run_test(model, test, batch_size, logger)
+    run_test(runtype, model, train, batch_size, logger)
+    run_test(runtype, model, test, batch_size, logger)
 
