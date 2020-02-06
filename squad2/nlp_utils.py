@@ -57,7 +57,9 @@ def token2id(train_reader, test_reader, ider, tokenizer):
 class TokenEmbeddings:
     def __init__(self):
         self.__cache = {}
-        self.__vocab = torchtext.vocab.GloVe(name='6B')
+        dim = 300
+        self.__unk_v = torch.randn(dim)
+        self.__vocab = torchtext.vocab.GloVe(name='840B', dim=dim, unk_init=lambda x:self.__unk_v)
         self.__char_emb = torchtext.vocab.CharNGram()
 
     def preheat(self, tokens):
@@ -84,6 +86,9 @@ class TokenEmbeddings:
     def get_vecs_by_tokens_inner(self, tokens):
         # dim=300
         word_emb = self.__vocab.get_vecs_by_tokens(tokens)
+        # only word_emb
+        #return word_emb
+
         # dim=100
         char_emb = self.__char_emb.get_vecs_by_tokens(tokens).view(-1, 100)
         return torch.cat((word_emb, char_emb), dim=1)

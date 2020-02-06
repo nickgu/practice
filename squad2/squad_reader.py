@@ -3,6 +3,7 @@
 # author: nickgu 
 # 
 
+import sys
 import json
 import unicodedata
 import string
@@ -40,7 +41,7 @@ class SquadReader():
                     question = qa['question']
                     ans = qa['answers']
                     is_impossible = qa.get('is_impossible', False)
-                    yield title, context, qid, question, ans, is_impossible
+                    yield title.strip(), context, qid, question.strip(), ans, is_impossible
 
     def iter_doc(self):
         for item in self.__data['data']:
@@ -83,9 +84,9 @@ def load_data(reader, tokenizer, limit_count=None):
         answer_token_end = -1
 
         if context[ans_start:ans_start+len(ans_text)] == ans_text:
-            a = context[:ans_start]
-            b = context[ans_start : ans_start + len(ans_text)]
-            c = context[ans_start+len(ans_text):]
+            a = context[:ans_start].strip()
+            b = context[ans_start : ans_start + len(ans_text)].strip()
+            c = context[ans_start+len(ans_text):].strip()
 
             context_tokens += tokenizer(a)
             answer_token_begin = len(context_tokens)
@@ -99,7 +100,6 @@ def load_data(reader, tokenizer, limit_count=None):
         #context_tokens.append('<end>')
         question_tokens = tokenizer(question)
 
-        # question_tokens, context_tokens, context_output(0,1,2)
         qt = []
         ct = []
         c_out = []
@@ -131,17 +131,34 @@ def load_data(reader, tokenizer, limit_count=None):
 
     return squad_data
 
-def count_tokens(reader):
-    import torchtext 
-    tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
-    data = load_data(reader, tokenizer, )
+def debug_length(squad_fn):
+    reader = SquadReader(squad_fn)
     maxl = 0
+    maxs = 0
+    maxn = 0
+    maxq = None
+
+    import torchtext 
+    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
+    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
+
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
-        l = len(list(tokenizer(title))) + len(list(tokenizer(context))) + len(list(tokenizer(question)))
+        l = len(question)
+        s = len(question.split(' '))
+        n = len(tokenizer(question))
         if l > maxl:
             maxl = l
+            maxq = question
+        if s > maxs:
+            maxs = s
+        if n > maxn:
+            maxn = n
 
+    print maxq
     print 'maxl:', maxl
+    print 'maxs:', maxs
+    print 'maxn:', maxn
+
 
 def list_titles(reader):
     for title, doc in reader.iter_doc():
@@ -163,7 +180,9 @@ def check_conflict(reader):
 def check_answer(answer_fn, squad_fn, output_fn):
     import torchtext 
     import sys
-    tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
+    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
 
     answer_fd = file(answer_fn)
     answers = []
@@ -172,7 +191,7 @@ def check_answer(answer_fn, squad_fn, output_fn):
             break
         pred, tgt, total = row
         ps, pe = map(lambda x:int(x), pred.split(','))
-        ts, te = map(lambda x:int(x), pred.split(','))
+        ts, te = map(lambda x:int(x), tgt.split(','))
         answers.append(((ps, pe), (ts, te)))
     print >> sys.stderr, 'answer loaded.'
 
@@ -185,27 +204,33 @@ def check_answer(answer_fn, squad_fn, output_fn):
         if idx >= len(answers):
             break
         
+        qtoks = tokenizer(question)
         ctoks = tokenizer(context)
         ans_info = answers[idx]
 
         print >> output, '\n## ID=%d ##\n%s' % (idx, '='*100)
         print >> output, '== Context =='
         print >> output, context.encode('utf8')
+        print >> output, '== Context Tokens =='
+        print >> output, (u','.join(ctoks)).encode('utf8')
         print >> output, '== Question =='
         print >> output, question.encode('utf8')
+        print >> output, '== Question Tokens =='
+        print >> output, (u','.join(qtoks)).encode('utf8')
         print >> output, '== Expected answer =='
         print >> output, 'rec: ' + u' '.join(ctoks[ans_info[1][0]:ans_info[1][1]]).encode('utf8')
+        print >> output, '(%d, %d)' % (ans_info[1][0], ans_info[1][1])
         for a in ans:
-            print >> output, a['text'].encode('utf8')
+            print >> output, '%s (%d)' % (a['text'].encode('utf8'), a['answer_start'])
         print >> output, '== Predict output =='
         print >> output, u' '.join(ctoks[ans_info[0][0]:ans_info[0][1]]).encode('utf8')
         print >> output, '(%d, %d)' % (ans_info[0][0], ans_info[0][1])
         if ans_info[0] == ans_info[1]:
-            print >> output, 'ExactMatch!'
+            print >> output, ' ## ExactMatch!'
         elif ans_info[0][0] == ans_info[1][0] or ans_info[0][1]==ans_info[1][1]:
-            print >> output, 'SideMatch!'
+            print >> output, ' ## SideMatch!'
         else:
-            print >> output, 'Wrong!'
+            print >> output, ' ## Wrong!'
 
         idx += 1
         

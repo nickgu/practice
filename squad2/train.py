@@ -24,8 +24,7 @@ class RunTypeBinary:
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
 
     def loss(self, predict, target):
-        temp_output = rnn_utils.pad_sequence(target, batch_first=True)
-        batch_context_output = torch.tensor(temp_output).cuda()
+        batch_context_output = rnn_utils.pad_sequence(target, batch_first=True).detach().cuda()
         l = self.__criterion(predict.view(-1,2), batch_context_output.view([-1]))
         return l
 
@@ -41,8 +40,7 @@ class RunTypeTriple:
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
 
     def loss(self, predict, target):
-        temp_output = rnn_utils.pad_sequence(target, batch_first=True)
-        batch_context_output = torch.tensor(temp_output).cuda()
+        batch_context_output = rnn_utils.pad_sequence(target, batch_first=True).detach().cuda()
         l = self.__criterion(predict.view(-1,3), batch_context_output.view([-1]))
         return l
 
@@ -78,7 +76,7 @@ def run_test(runtype, model, data, batch_size, logger=None, answer_output=None):
 
             l = runtype.loss(y_, y)
             step += 1
-            loss += l
+            loss += l.item()
 
             ans = runtype.get_ans_range(y_)
             for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), data.answer_range[s:s+batch_size])):
@@ -98,7 +96,7 @@ def run_test(runtype, model, data, batch_size, logger=None, answer_output=None):
                 exact_match*100./count, exact_match, count, 
                 side_match*50./count, loss/step)
 
-        print info
+        print >> sys.stderr, info
         if logger:
             print >> logger, info
 
@@ -110,7 +108,7 @@ def check_coverage(toks, vocab):
         m = vocab.get_vecs_by_tokens(sentence)
         hit += len(filter(lambda x:x, [i.sum().abs()>1e-5 for i in m]))
 
-    print 'Vocab coverage: %.2f%% (%d/%d)' % (hit*100./count, hit, count)
+    print >> sys.stderr, 'Vocab coverage: %.2f%% (%d/%d)' % (hit*100./count, hit, count)
 
 class UnkEmb:
     def __init__(self):
@@ -126,7 +124,7 @@ def preheat(vocab, *args):
     for doc in args:
         for sentence in doc:
             vocab.preheat(sentence)
-    print 'Pre-heat over', vocab.cache_size()
+    print >> sys.stderr, 'Pre-heat over', vocab.cache_size()
     
 if __name__=='__main__':
     arg = pydev.Arg('SQuAD data training program with pytorch.')
@@ -135,6 +133,7 @@ if __name__=='__main__':
     arg.str_opt('test_epoch', 't', default='5')
     arg.str_opt('logname', 'L', default='log.txt')
     arg.str_opt('save', 's', default='params/temp_model.pkl')
+    arg.bool_opt('continue_training', 'c')
     opt = arg.init_arg()
 
     logger = file(opt.logname, 'w')
@@ -151,26 +150,35 @@ if __name__=='__main__':
     print >> sys.stderr, 'batch_size=%d' % batch_size
     print >> sys.stderr, 'log_filename=%s' % opt.logname
     print >> sys.stderr, 'save_model=%s' % opt.save
+    print >> sys.stderr, 'continue_training=%s' % opt.continue_training
 
     # === Init Model ===
     
-    #runtype = RunTypeTriple()
-    runtype = RunTypeBinary()
+    runtype = RunTypeTriple()
+    #runtype = RunTypeBinary()
 
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
 
     # research model.
-    model = V2_MatchAttention_Binary(input_emb_size).cuda()
+    model = V2_MatchAttention(input_emb_size, hidden_size=128, dropout=0.2).cuda()
+    #model = V2_MatchAttention_Test(input_emb_size).cuda()
+    #model = V2_MatchAttention_Binary(input_emb_size).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    #model = V3_Model(input_emb_size).cuda()
+    #model = V3_FCEmbModel(input_emb_size).cuda()
     #model = V2_2_BilinearAttention(input_emb_size).cuda()
     #model = V2_1_BiDafLike(input_emb_size).cuda()
     #model = V3_CrossConv().cuda()
     #model = V4_Transformer(input_emb_size).cuda()
 
-    print ' == model_size: ', easy_train.model_params_size(model), ' =='
+    print >> sys.stderr, ' == model_size: ', easy_train.model_params_size(model), ' =='
+
+    if opt.continue_training:
+        print >> sys.stderr, 'prepare to load previous model.'
+        model.load_state_dict(torch.load(opt.save))
+        print >> sys.stderr, 'load over.'
+
     # for triple.
     # criterion init in runtype.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
@@ -183,11 +191,11 @@ if __name__=='__main__':
     print >> sys.stderr, 'train: [%s]' % train_filename
     print >> sys.stderr, 'test: [%s]' % test_filename
 
-    tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
+    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
 
     #unk_emb = UnkEmb()
-    #vocab = torchtext.vocab.GloVe(name='6B', unk_init=unk_emb.get)
-    #vocab = torchtext.vocab.GloVe(name='6B', unk_init=lambda t:torch.randn(300))
     #vocab = torchtext.vocab.GloVe(name='6B')
     vocab = nlp_utils.TokenEmbeddings()
 
@@ -215,7 +223,7 @@ if __name__=='__main__':
 
     # training phase.
     for epoch in range(epoch_count):
-        print 'Epoch %d' % epoch
+        print >> sys.stderr, 'Epoch %d' % epoch
         loss = 0 
         step = 0
         bar = tqdm.tqdm(range(0, len(train.qtoks), batch_size))
@@ -223,10 +231,9 @@ if __name__=='__main__':
             optimizer.zero_grad()
 
             batch_qt = train.qtoks[s:s+batch_size]
-            batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).cuda()
             batch_ct = train.ctoks[s:s+batch_size]
-            batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).cuda()
-            batch_start_end = torch.tensor(train.answer_range[s:s+batch_size]).cuda()
+            batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
+            batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
@@ -235,11 +242,10 @@ if __name__=='__main__':
             l = runtype.loss(y_, y)
 
             step += 1
-            loss += l
+            loss += l.item()
 
             l.backward()
             optimizer.step()
-
             bar.set_description('loss=%.5f' % (loss / step))
 
         print >> logger, 'epoch=%d\tloss=%.5f' % (epoch, loss/step)
