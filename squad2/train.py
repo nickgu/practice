@@ -9,12 +9,15 @@ import torchtext
 import torch.nn.utils.rnn as rnn_utils
 import sys
 import tqdm
-import models
-import nlp_utils
+
+# import models.
+from models import *
+from milestones import *
 
 sys.path.append('../learn_pytorch')
 import easy_train
 import pydev
+import nlp_utils
 
 class RunTypeBinary:
     def __init__(self):
@@ -50,7 +53,7 @@ class RunTypeTriple:
         data.output = data.triple_output
 
 
-def run_test(runtype, model, data, batch_size, logger=None):
+def run_test(runtype, model, data, batch_size, logger=None, answer_output=None):
     # test code.
     with torch.no_grad():
         count = 0
@@ -72,7 +75,6 @@ def run_test(runtype, model, data, batch_size, logger=None):
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
             y_ = model(batch_ques_emb, batch_cont_emb)
-            y_ = y_.softmax(-1)
 
             l = runtype.loss(y_, y)
             step += 1
@@ -80,6 +82,8 @@ def run_test(runtype, model, data, batch_size, logger=None):
 
             ans = runtype.get_ans_range(y_)
             for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), data.answer_range[s:s+batch_size])):
+                if answer_output:
+                    print >> answer_output, '%d,%d\t%d,%d\t%d' % (a,b,c,d, len(data.ctoks[s+idx]))
                 # test one side.
                 count += 1
                 if a==c and b==d:
@@ -130,6 +134,7 @@ if __name__=='__main__':
     arg.str_opt('batch', 'b', default='64')
     arg.str_opt('test_epoch', 't', default='5')
     arg.str_opt('logname', 'L', default='log.txt')
+    arg.str_opt('save', 's', default='params/temp_model.pkl')
     opt = arg.init_arg()
 
     logger = file(opt.logname, 'w')
@@ -145,26 +150,30 @@ if __name__=='__main__':
     print >> sys.stderr, 'test_epoch=%d' % test_epoch
     print >> sys.stderr, 'batch_size=%d' % batch_size
     print >> sys.stderr, 'log_filename=%s' % opt.logname
-
+    print >> sys.stderr, 'save_model=%s' % opt.save
 
     # === Init Model ===
     
-    runtype = RunTypeTriple()
-    #runtype = RunTypeBinary()
+    #runtype = RunTypeTriple()
+    runtype = RunTypeBinary()
 
-    # make model.
-    #model = models.V0_Encoder(ider.size(), input_emb_size, hidden_size)
-    #model = models.V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    model = models.V2_MatchAttention(input_emb_size).cuda()
-    #model = models.V2_MatchAttention_Binary(input_emb_size).cuda()
-    #model = models.V2_1_BiDafLike(input_emb_size).cuda()
-    #model = models.V3_CrossConv().cuda()
-    #model = models.V4_Transformer(input_emb_size).cuda()
+    # milestones model.
+    #model = V2_MatchAttention(input_emb_size).cuda()
+
+    # research model.
+    model = V2_MatchAttention_Binary(input_emb_size).cuda()
+    #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
+    #model = V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
+    #model = V3_Model(input_emb_size).cuda()
+    #model = V2_2_BilinearAttention(input_emb_size).cuda()
+    #model = V2_1_BiDafLike(input_emb_size).cuda()
+    #model = V3_CrossConv().cuda()
+    #model = V4_Transformer(input_emb_size).cuda()
 
     print ' == model_size: ', easy_train.model_params_size(model), ' =='
     # for triple.
     # criterion init in runtype.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
 
     # === Init Data ===
     data_path = '../dataset/squad1/'
@@ -186,10 +195,17 @@ if __name__=='__main__':
     test_reader = squad_reader.SquadReader(test_filename)
 
     train = squad_reader.load_data(train_reader, tokenizer, limit_count=None)
-    test = squad_reader.load_data(test_reader, tokenizer, limit_count=50)
+    test = squad_reader.load_data(test_reader, tokenizer, limit_count=None)
     runtype.adjust_data(train)
     runtype.adjust_data(test)
     print >> sys.stderr, 'Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks))
+
+    # shuffle training data.
+    '''
+    print >> sys.stderr, 'begin to shuffle training data..'
+    train.shuffle()
+    print >> sys.stderr, 'shuffle ok.'
+    '''
 
     # pre-heat.
     preheat(vocab, train.qtoks, train.ctoks, test.qtoks, test.ctoks)
@@ -216,7 +232,6 @@ if __name__=='__main__':
             # binary output: (batch, clen, 2, 2)
             y = train.output[s:s+batch_size]
             y_ = model(batch_ques_emb, batch_cont_emb)
-            #y_ = y_.softmax(-1)
             l = runtype.loss(y_, y)
 
             step += 1
@@ -231,11 +246,22 @@ if __name__=='__main__':
 
         if test_epoch>0:
             if (epoch+1) % test_epoch ==0:
-                print >> logger, 'Epoch %d:' % epoch
+                print >> logger, 'TestEpoch %d:' % epoch
+                train_out = file('log/train.ans.out', 'w')
+                test_out = file('log/test.ans.out', 'w')
+                run_test(runtype, model, train, batch_size, logger, train_out)
+                run_test(runtype, model, test, batch_size, logger, test_out)
+                train_out.close()
+                test_out.close()
+                torch.save(model.state_dict(), opt.save)
 
-                run_test(runtype, model, train, batch_size, logger)
-                run_test(runtype, model, test, batch_size, logger)
+    train_out = file('log/train.ans.out', 'w')
+    test_out = file('log/test.ans.out', 'w')
+    run_test(runtype, model, train, batch_size, logger, train_out)
+    run_test(runtype, model, test, batch_size, logger, test_out)
+    train_out.close()
+    test_out.close()
 
-    run_test(runtype, model, train, batch_size, logger)
-    run_test(runtype, model, test, batch_size, logger)
+    # save model.
+    torch.save(model.state_dict(), opt.save)
 

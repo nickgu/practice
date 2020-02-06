@@ -90,6 +90,7 @@ class TokenEmbeddings:
 
 # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
 def u2a(s):
+    all_letters = string.ascii_letters + " .,;'-"
     return ''.join(
         c for c in unicodedata.normalize('NFD', s)
         if unicodedata.category(c) != 'Mn'

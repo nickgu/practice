@@ -6,8 +6,8 @@
 import json
 import unicodedata
 import string
-
-all_letters = string.ascii_letters + " .,;'-"
+import fire
+import pydev
 
 class SquadData:
     def __init__(self):
@@ -16,6 +16,12 @@ class SquadData:
         self.triple_output = []
         self.binary_output = []
         self.answer_range = []
+
+    def shuffle(self):
+        import random
+        shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, self.answer_range)
+        random.shuffle(shuf)
+        self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, self.answer_range = zip(*shuf)
 
 class SquadReader():
     def __init__(self, filename):
@@ -64,6 +70,7 @@ def load_data(reader, tokenizer, limit_count=None):
         ans_text = 'none'
 
         # ignore impossible first.
+        # SQuAD 1.1 doesn't have impossible data.
         if is_impossible:
             continue
 
@@ -87,12 +94,10 @@ def load_data(reader, tokenizer, limit_count=None):
             context_tokens += tokenizer(c)
         else:
             context_tokens = tokenizer(context)
+            print >> sys.stderr, 'Mismatch on answer finding..'
 
-        context_tokens.append('<end>')
+        #context_tokens.append('<end>')
         question_tokens = tokenizer(question)
-
-        #all_context_tokens.append( context_tokens )
-        #all_question_tokens.append( question_tokens )
 
         # question_tokens, context_tokens, context_output(0,1,2)
         qt = []
@@ -128,8 +133,8 @@ def load_data(reader, tokenizer, limit_count=None):
 
 def count_tokens(reader):
     import torchtext 
-
     tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    data = load_data(reader, tokenizer, )
     maxl = 0
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
         l = len(list(tokenizer(title))) + len(list(tokenizer(context))) + len(list(tokenizer(question)))
@@ -142,16 +147,70 @@ def list_titles(reader):
     for title, doc in reader.iter_doc():
         print title.encode('gb18030') + ' (%s)' % len(doc)
 
+def check_conflict(reader):
+    stat_dict = {}
+    all = 0
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        if is_impossible:
+            continue
+        c = context.count(ans[0]['text'])
+        all += 1
+        stat_dict[c] = stat_dict.get(c, 0) + 1
+
+    for n, x  in sorted(stat_dict.iteritems(), key=lambda x:-x[1]):
+        print n, x, '%.2f%%' % (x*100/all)
+
+def check_answer(answer_fn, squad_fn, output_fn):
+    import torchtext 
+    import sys
+    tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+
+    answer_fd = file(answer_fn)
+    answers = []
+    for row in pydev.foreach_row(file(answer_fn)):
+        if len(row)!=3:
+            break
+        pred, tgt, total = row
+        ps, pe = map(lambda x:int(x), pred.split(','))
+        ts, te = map(lambda x:int(x), pred.split(','))
+        answers.append(((ps, pe), (ts, te)))
+    print >> sys.stderr, 'answer loaded.'
+
+    reader = SquadReader(squad_fn)
+    output = file(output_fn, 'w')
+    idx = 0
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        if is_impossible:
+            continue
+        if idx >= len(answers):
+            break
+        
+        ctoks = tokenizer(context)
+        ans_info = answers[idx]
+
+        print >> output, '\n## ID=%d ##\n%s' % (idx, '='*100)
+        print >> output, '== Context =='
+        print >> output, context.encode('utf8')
+        print >> output, '== Question =='
+        print >> output, question.encode('utf8')
+        print >> output, '== Expected answer =='
+        print >> output, 'rec: ' + u' '.join(ctoks[ans_info[1][0]:ans_info[1][1]]).encode('utf8')
+        for a in ans:
+            print >> output, a['text'].encode('utf8')
+        print >> output, '== Predict output =='
+        print >> output, u' '.join(ctoks[ans_info[0][0]:ans_info[0][1]]).encode('utf8')
+        print >> output, '(%d, %d)' % (ans_info[0][0], ans_info[0][1])
+        if ans_info[0] == ans_info[1]:
+            print >> output, 'ExactMatch!'
+        elif ans_info[0][0] == ans_info[1][0] or ans_info[0][1]==ans_info[1][1]:
+            print >> output, 'SideMatch!'
+        else:
+            print >> output, 'Wrong!'
+
+        idx += 1
+        
 
 if __name__=='__main__':
-    import sys
-    path = sys.argv[1]
-    reader = SquadReader(path)
-
-    #count_tokens(reader)
-    list_titles(reader)
-
-
-
+    fire.Fire()
 
 
