@@ -133,11 +133,10 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 else:
                     # if answer == answer_candidate, also Exact Match.
                     trim_ans = u''.join(data.ctoks[s+idx][a:b]).replace(u' ', '')
-                    for a in data.answer_candidates[s+idx]:
-                        adjust_ans = a.replace(u' ', '')
+                    for ans_cand in data.answer_candidates[s+idx]:
+                        adjust_ans = ans_cand.replace(u' ', '')
                         if adjust_ans == trim_ans:
                             em = True
-
                 if em:
                     exact_match += 1
 
@@ -147,6 +146,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     side_match += 1
                 if b==d:
                     side_match += 1
+
 
         info = '#(%s) EM=%.2f%% (%d/%d), SM=%.2f%%, OSM=%.2f%% Loss=%.5f' % (
                 data.data_name,
