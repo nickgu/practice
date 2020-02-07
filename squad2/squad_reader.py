@@ -11,7 +11,8 @@ import fire
 import pydev
 
 class SquadData:
-    def __init__(self):
+    def __init__(self, data_name='SQuAD data'):
+        self.data_name = data_name
         self.qtoks = []
         self.ctoks = []
         self.triple_output = []
@@ -62,9 +63,9 @@ class SquadReader():
                     is_impossible = qa.get('is_impossible', False)
                     yield qid, question, ans, is_impossible
 
-def load_data(reader, tokenizer, limit_count=None):
+def load_data(reader, tokenizer, data_name=None, limit_count=None):
     import torch
-    squad_data = SquadData()
+    squad_data = SquadData(data_name)
 
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
         ans_start = -1

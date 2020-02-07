@@ -19,6 +19,37 @@ import easy_train
 import pydev
 import nlp_utils
 
+def dp_to_generate_answer_range(data):
+    ''' 
+        data shape: (batch, clen, 2), 
+        last dim indicates start/end prob.
+    '''
+    ans = []
+    l = data.shape[1]
+    data = data.cpu().numpy()
+    dp = [0.] * (l+1)
+    dp_sidx = [-1] * (l+1)
+    for b in data:
+        max_prob = 0
+        max_range = (0, 0)
+        dp[0] = 0
+        dp_sidx[0] = -1
+        for idx in range(l):
+            sp, ep = b[idx]
+            cur_end_prob = dp[idx] * ep
+            if cur_end_prob > max_prob:
+                max_prob = cur_end_prob
+                max_range = (dp_sidx[idx], idx)
+
+            if sp>dp[idx]:
+                dp[idx+1] = sp
+                dp_sidx[idx+1] = idx
+            else:
+                dp[idx+1] = dp[idx]
+                dp_sidx[idx+1] = dp_sidx[idx]
+        ans.append(max_range)
+    return ans
+
 class RunConfigBinary:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
@@ -29,7 +60,10 @@ class RunConfigBinary:
         return l
 
     def get_ans_range(self, y):
-        return y.permute(0,2,1,3)[:,:,:,1:].squeeze().max(dim=2).indices
+        # input_shape: (batch, clen, 2, 2)
+        #return y.permute(0,2,1,3)[:,:,:,1:].squeeze().max(dim=2).indices
+        prob = y[:,:,:,1:].squeeze()
+        return dp_to_generate_answer_range(prob)
 
     def adjust_data(self, data):
         data.output = data.binary_output
@@ -37,7 +71,7 @@ class RunConfigBinary:
 
 class RunConfigTriple:
     def __init__(self):
-        self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
+        self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 50., 50.]).cuda())
 
     def loss(self, predict, target):
         batch_context_output = rnn_utils.pad_sequence(target, batch_first=True).detach().cuda()
@@ -45,7 +79,9 @@ class RunConfigTriple:
         return l
 
     def get_ans_range(self, y):
-        return y.permute((0,2,1)).max(dim=2).indices[:,1:]
+        #return y.permute((0,2,1)).max(dim=2).indices[:,1:]
+        prob = y[:,:,1:]
+        return dp_to_generate_answer_range(prob)
 
     def adjust_data(self, data):
         data.output = data.triple_output
@@ -57,6 +93,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
         count = 0
         exact_match = 0
         side_match = 0
+        one_side_match = 0
         
         loss = 0 
         step = 0
@@ -84,22 +121,26 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
             loss += l.item()
 
             ans = runconfig.get_ans_range(y_)
-            for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), data.answer_range[s:s+batch_size])):
+            for idx, ((a,b), (c,d)) in enumerate(zip(ans, data.answer_range[s:s+batch_size])):
                 if answer_output:
                     print >> answer_output, '%d,%d\t%d,%d\t%d' % (a,b,c,d, len(data.ctoks[s+idx]))
                 # test one side.
                 count += 1
                 if a==c and b==d:
                     exact_match += 1
-
+                if a==c or b==d:
+                    one_side_match += 1
                 if a==c:
                     side_match += 1
                 if b==d:
                     side_match += 1
 
-        info = 'EM=%.2f%% (%d/%d), one_side=%.2f%% Loss=%.5f' % (
+        info = '#(%s) EM=%.2f%% (%d/%d), SM=%.2f%%, OSM=%.2f%% Loss=%.5f' % (
+                data.data_name,
                 exact_match*100./count, exact_match, count, 
-                side_match*50./count, loss/step)
+                side_match*50./count, 
+                one_side_match*100. / count,
+                loss/step)
 
         print >> sys.stderr, info
         if logger:
@@ -174,9 +215,10 @@ if __name__=='__main__':
 
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
+    model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # research model.
-    model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V3_Model(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Test(input_emb_size).cuda()
     #model = V2_MatchAttention_Binary(input_emb_size).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
@@ -187,6 +229,7 @@ if __name__=='__main__':
     #model = V3_CrossConv().cuda()
     #model = V4_Transformer(input_emb_size).cuda()
 
+    print >> sys.stderr, ' == INIT_MODEL : %s ==' % (type(model).__name__)
     print >> sys.stderr, ' == model_size: ', easy_train.model_params_size(model), ' =='
 
     if opt.continue_training:
@@ -213,8 +256,8 @@ if __name__=='__main__':
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
 
-    train = squad_reader.load_data(train_reader, tokenizer, limit_count=load_size[0])
-    test = squad_reader.load_data(test_reader, tokenizer, limit_count=load_size[1])
+    train = squad_reader.load_data(train_reader, tokenizer, data_name='Train', limit_count=load_size[0])
+    test = squad_reader.load_data(test_reader, tokenizer, data_name='Test', limit_count=load_size[1])
     runconfig.adjust_data(train)
     runconfig.adjust_data(test)
     print >> sys.stderr, 'Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks))
