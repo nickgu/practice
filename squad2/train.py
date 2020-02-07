@@ -126,8 +126,21 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     print >> answer_output, '%d,%d\t%d,%d\t%d' % (a,b,c,d, len(data.ctoks[s+idx]))
                 # test one side.
                 count += 1
+
+                em = False
                 if a==c and b==d:
+                    em = True
+                else:
+                    # if answer == answer_candidate, also Exact Match.
+                    trim_ans = u''.join(data.ctoks[s+idx][a:b]).replace(u' ', '')
+                    for a in data.answer_candidates[s+idx]:
+                        adjust_ans = a.replace(u' ', '')
+                        if adjust_ans == trim_ans:
+                            em = True
+
+                if em:
                     exact_match += 1
+
                 if a==c or b==d:
                     one_side_match += 1
                 if a==c:
@@ -208,19 +221,19 @@ if __name__=='__main__':
     vocab = nlp_utils.TokenEmbeddings()
     input_emb_size = 400
 
-    runconfig = RunConfigTriple()
-    #runconfig = RunConfigBinary()
+    #runconfig = RunConfigTriple()
+    runconfig = RunConfigBinary()
     #runconfig.embedding_trainable = False
     runconfig.embedding_trainable = True
 
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
-    model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # research model.
     #model = V3_Model(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Test(input_emb_size).cuda()
-    #model = V2_MatchAttention_Binary(input_emb_size).cuda()
+    model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
     #model = V3_FCEmbModel(input_emb_size).cuda()

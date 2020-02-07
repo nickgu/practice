@@ -18,12 +18,15 @@ class SquadData:
         self.triple_output = []
         self.binary_output = []
         self.answer_range = []
+        self.answer_candidates = []
 
     def shuffle(self):
         import random
-        shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, self.answer_range)
+        shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, \
+                self.output, self.answer_range, self.answer_candidates)
         random.shuffle(shuf)
-        self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, self.answer_range = zip(*shuf)
+        self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, \
+                self.answer_range, self.answer_candidates = zip(*shuf)
 
 class SquadReader():
     def __init__(self, filename):
@@ -80,6 +83,10 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
             ans_start = ans[0]['answer_start']
             ans_text = ans[0]['text']
 
+        ans_cand = []
+        for a in ans:
+            ans_cand.append(a['text'])
+
         context_tokens = []
         answer_token_begin = -1
         answer_token_end = -1
@@ -124,6 +131,7 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
         squad_data.triple_output.append(torch.tensor(c_out))
         squad_data.binary_output.append(torch.tensor(b_out))
         squad_data.answer_range.append( (answer_token_begin, answer_token_end) )
+        squad_data.answer_candidates.append( ans_cand )
         
         if limit_count is not None:
             limit_count -= 1
@@ -181,6 +189,7 @@ def check_conflict(reader):
 def check_answer(answer_fn, squad_fn, output_fn):
     import torchtext 
     import sys
+    import tqdm
     #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
     tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
     tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
@@ -199,7 +208,7 @@ def check_answer(answer_fn, squad_fn, output_fn):
     reader = SquadReader(squad_fn)
     output = file(output_fn, 'w')
     idx = 0
-    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+    for title, context, qid, question, ans, is_impossible in tqdm.tqdm(reader.iter_instance()):
         if is_impossible:
             continue
         if idx >= len(answers):
