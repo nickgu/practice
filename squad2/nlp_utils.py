@@ -61,6 +61,12 @@ class TokenEmbeddings:
         self.__unk_v = torch.randn(dim)
         self.__vocab = torchtext.vocab.GloVe(name='840B', dim=dim, unk_init=lambda x:self.__unk_v)
         self.__char_emb = torchtext.vocab.CharNGram()
+        self.__unk_id = len(self.__vocab.itos)
+
+    def vocab(self): return self.__vocab
+
+    def get_pretrained(self):
+        return torch.cat((self.__vocab.vectors, torch.zeros((1, self.__vocab.dim))))
 
     def preheat(self, tokens):
         temp_toks = []
@@ -76,6 +82,12 @@ class TokenEmbeddings:
 
     def cache_size(self):
         return len(self.__cache)
+
+    def get_ids_by_tokens(self, tokens):
+        l = []
+        for tok in tokens:
+            l.append(self.__vocab.stoi.get(tok, self.__unk_id))
+        return torch.LongTensor(l)
 
     def get_vecs_by_tokens(self, tokens):
         l = []

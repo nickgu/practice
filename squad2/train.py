@@ -19,7 +19,7 @@ import easy_train
 import pydev
 import nlp_utils
 
-class RunTypeBinary:
+class RunConfigBinary:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
 
@@ -35,7 +35,7 @@ class RunTypeBinary:
         data.output = data.binary_output
           
 
-class RunTypeTriple:
+class RunConfigTriple:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100., 100.]).cuda())
 
@@ -51,7 +51,7 @@ class RunTypeTriple:
         data.output = data.triple_output
 
 
-def run_test(runtype, model, data, batch_size, logger=None, answer_output=None):
+def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None):
     # test code.
     with torch.no_grad():
         count = 0
@@ -63,22 +63,27 @@ def run_test(runtype, model, data, batch_size, logger=None, answer_output=None):
 
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
             batch_qt = data.qtoks[s:s+batch_size]
-            batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).cuda()
             batch_ct = data.ctoks[s:s+batch_size]
-            batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).cuda()
+            if runconfig.embedding_trainable:
+                batch_ques_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
+                batch_cont_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
-            batch, clen, _ = batch_cont_emb.shape
+            else:
+                batch_ques_x = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
+                batch_cont_x = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
+
+            batch, clen = batch_cont_x.shape[:2]
             y = rnn_utils.pad_sequence(data.output[s:s+batch_size], batch_first=True)
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
-            y_ = model(batch_ques_emb, batch_cont_emb)
+            y_ = model(batch_ques_x, batch_cont_x)
 
-            l = runtype.loss(y_, y)
+            l = runconfig.loss(y_, y)
             step += 1
             loss += l.item()
 
-            ans = runtype.get_ans_range(y_)
+            ans = runconfig.get_ans_range(y_)
             for idx, ((a,b), (c,d)) in enumerate(zip(ans.tolist(), data.answer_range[s:s+batch_size])):
                 if answer_output:
                     print >> answer_output, '%d,%d\t%d,%d\t%d' % (a,b,c,d, len(data.ctoks[s+idx]))
@@ -134,6 +139,7 @@ if __name__=='__main__':
     arg.str_opt('logname', 'L', default='log.txt')
     arg.str_opt('save', 's', default='params/temp_model.pkl')
     arg.bool_opt('continue_training', 'c')
+    arg.bool_opt('test_mode', 'T')
     opt = arg.init_arg()
 
     logger = file(opt.logname, 'w')
@@ -142,8 +148,10 @@ if __name__=='__main__':
     epoch_count = int(opt.epoch)
     batch_size = int(opt.batch)
     test_epoch = int(opt.test_epoch)
-
-    input_emb_size = 400
+    load_size = (None, None)
+    if opt.test_mode:
+        print >> sys.stderr, 'Running in TEST-MODE'
+        load_size = (5000, 1000)
 
     print >> sys.stderr, 'epoch=%d' % epoch_count
     print >> sys.stderr, 'test_epoch=%d' % test_epoch
@@ -154,14 +162,21 @@ if __name__=='__main__':
 
     # === Init Model ===
     
-    runtype = RunTypeTriple()
-    #runtype = RunTypeBinary()
+    #unk_emb = UnkEmb()
+    #vocab = torchtext.vocab.GloVe(name='6B')
+    vocab = nlp_utils.TokenEmbeddings()
+    input_emb_size = 400
+
+    runconfig = RunConfigTriple()
+    #runconfig = RunConfigBinary()
+    #runconfig.embedding_trainable = False
+    runconfig.embedding_trainable = True
 
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
 
     # research model.
-    model = V2_MatchAttention(input_emb_size, hidden_size=128, dropout=0.2).cuda()
+    model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Test(input_emb_size).cuda()
     #model = V2_MatchAttention_Binary(input_emb_size).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
@@ -180,7 +195,7 @@ if __name__=='__main__':
         print >> sys.stderr, 'load over.'
 
     # for triple.
-    # criterion init in runtype.
+    # criterion init in runconfig.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
 
     # === Init Data ===
@@ -195,17 +210,13 @@ if __name__=='__main__':
     tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
     tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
 
-    #unk_emb = UnkEmb()
-    #vocab = torchtext.vocab.GloVe(name='6B')
-    vocab = nlp_utils.TokenEmbeddings()
-
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
 
-    train = squad_reader.load_data(train_reader, tokenizer, limit_count=None)
-    test = squad_reader.load_data(test_reader, tokenizer, limit_count=None)
-    runtype.adjust_data(train)
-    runtype.adjust_data(test)
+    train = squad_reader.load_data(train_reader, tokenizer, limit_count=load_size[0])
+    test = squad_reader.load_data(test_reader, tokenizer, limit_count=load_size[1])
+    runconfig.adjust_data(train)
+    runconfig.adjust_data(test)
     print >> sys.stderr, 'Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks))
 
     # shuffle training data.
@@ -232,14 +243,19 @@ if __name__=='__main__':
 
             batch_qt = train.qtoks[s:s+batch_size]
             batch_ct = train.ctoks[s:s+batch_size]
-            batch_ques_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
-            batch_cont_emb = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
+            if runconfig.embedding_trainable:
+                batch_ques_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
+                batch_cont_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
+
+            else:
+                batch_ques_x = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
+                batch_cont_x = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
             y = train.output[s:s+batch_size]
-            y_ = model(batch_ques_emb, batch_cont_emb)
-            l = runtype.loss(y_, y)
+            y_ = model(batch_ques_x, batch_cont_x)
+            l = runconfig.loss(y_, y)
 
             step += 1
             loss += l.item()
@@ -253,18 +269,18 @@ if __name__=='__main__':
         if test_epoch>0:
             if (epoch+1) % test_epoch ==0:
                 print >> logger, 'TestEpoch %d:' % epoch
-                train_out = file('log/train.ans.out', 'w')
-                test_out = file('log/test.ans.out', 'w')
-                run_test(runtype, model, train, batch_size, logger, train_out)
-                run_test(runtype, model, test, batch_size, logger, test_out)
+                train_out = file('log/ans/train.ans.out', 'w')
+                test_out = file('log/ans/test.ans.out', 'w')
+                run_test(runconfig, model, train, batch_size, logger, train_out)
+                run_test(runconfig, model, test, batch_size, logger, test_out)
                 train_out.close()
                 test_out.close()
                 torch.save(model.state_dict(), opt.save)
 
-    train_out = file('log/train.ans.out', 'w')
-    test_out = file('log/test.ans.out', 'w')
-    run_test(runtype, model, train, batch_size, logger, train_out)
-    run_test(runtype, model, test, batch_size, logger, test_out)
+    train_out = file('log/ans/train.ans.out', 'w')
+    test_out = file('log/ans/test.ans.out', 'w')
+    run_test(runconfig, model, train, batch_size, logger, train_out)
+    run_test(runconfig, model, test, batch_size, logger, test_out)
     train_out.close()
     test_out.close()
 
