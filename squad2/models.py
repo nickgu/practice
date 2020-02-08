@@ -6,11 +6,13 @@
 import torch
 import sys
 
-class V2_MatchAttention_Binary(torch.nn.Module):
+class V3_DropoutMatchAttention(torch.nn.Module):
     '''
+        Test 57% with DP decision.
+        Train 71%
     '''
     def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
-        super(V2_MatchAttention_Binary, self).__init__()
+        super(V3_DropoutMatchAttention, self).__init__()
         self.__hidden_size = hidden_size
 
         if pretrain_weights is None:
@@ -22,6 +24,8 @@ class V2_MatchAttention_Binary(torch.nn.Module):
             print >> sys.stderr, 'Init embedding from pretrained.'
             self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
             self.__emb_size = pretrain_weights.shape[1]
+
+        self.__dropout = torch.nn.Dropout(dropout)
 
         self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
                 dropout=dropout, 
@@ -79,6 +83,7 @@ class V2_MatchAttention_Binary(torch.nn.Module):
 
         # cat.
         x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
+        x = self.__dropout(x)
 
         # upper rnn.
         x, _ = self.__upper_rnn(x)
@@ -90,13 +95,11 @@ class V2_MatchAttention_Binary(torch.nn.Module):
         return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
 
-
-class V3_Model(torch.nn.Module):
+class V3_BiDafLike(torch.nn.Module):
     '''
-        Changed from V2_MatchAttention_EmbTrainable(42% on 8E)
     '''
     def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
-        super(V3_Model, self).__init__()
+        super(V3_BiDafLike, self).__init__()
         self.__hidden_size = hidden_size
 
         if pretrain_weights is None:
@@ -109,7 +112,7 @@ class V3_Model(torch.nn.Module):
             self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
             self.__emb_size = pretrain_weights.shape[1]
 
-        self.__rnn = torch.nn.LSTM(self.__emb_size * 2, hidden_size, 
+        self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
                 dropout=dropout, 
                 num_layers=layer_num,
                 batch_first=True, 
@@ -119,17 +122,27 @@ class V3_Model(torch.nn.Module):
         #   hidden * 2 * 2
         #       2: bi-directional 
         #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
+        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*3, hidden_size, 
                 dropout=dropout, 
                 num_layers=out_layer_num, 
                 batch_first=True, 
                 bidirectional=True)
 
-        self.__dense = torch.nn.Sequential(
+        self.__dense_start = torch.nn.Sequential(
                 torch.nn.Linear(self.__hidden_size*2, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(256, 3)
-                )
+                torch.nn.Linear(256, 2) )
+
+        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
+                #dropout=dropout, 
+                num_layers=1, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_end = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 2) )
 
     def cross_feature(self, c_emb, q_emb):
         # q_emb: (batch, qlen, emb)
@@ -145,39 +158,53 @@ class V3_Model(torch.nn.Module):
         c_emb = self.__embed(c_tok_id)
 
         batch = c_emb.shape[0]
-        seq_len = c_emb.shape[1] # batch, seq_len, hidden*bi
+        clen = c_emb.shape[1] # batch, clen, hidden*bi
 
-        cq1 = self.cross_feature(c_emb, q_emb)
-        qc1 = self.cross_feature(q_emb, c_emb)
-
-        q_out, _ = self.__rnn( torch.cat((q_emb, qc1), dim=2) )
-        c_out, _ = self.__rnn( torch.cat((c_emb, cq1), dim=2) )
+        q_out, _ = self.__rnn(q_emb)
+        c_out, _ = self.__rnn(c_emb)
     
         # cross q/c
-        cq2 = self.cross_feature(c_out, q_out)
+        cq = self.cross_feature(c_out, q_out)
+        qc = self.cross_feature(q_out, c_out)
+        qtilt = qc.sum(dim=1).unsqueeze(dim=1).expand(batch, clen, -1)
 
         # cat.
-        x = torch.cat((c_out, cq2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
+        x = torch.cat((c_out, cq, qtilt), dim=2) # batch, clen, (d*2 + d*2 + d*2)
 
         # upper rnn.
         x, _ = self.__upper_rnn(x)
-        out = self.__dense(x)
-        return out
+
+        out_start = self.__dense_start(x)
+
+        out_end, _ = self.__rnn_end(x)
+        out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
+        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
 
-class V2_MatchAttention_Test(torch.nn.Module):
+class V3_BilinearAttention(torch.nn.Module):
     '''
+        Test 57% with DP decision.
+        Train 71%
     '''
-    def __init__(self, emb_size, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
-        super(V2_MatchAttention_Test, self).__init__()
-
-        self.__emb_size = emb_size
+    def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
+        super(V3_BilinearAttention, self).__init__()
         self.__hidden_size = hidden_size
 
-        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
+        if pretrain_weights is None:
+            print >> sys.stderr, 'Init embedding.'
+            self.__embed = torch.nn.Embedding(vocab_size, emb_size)
+            self.__emb_size = emb_size
+
+        else:
+            print >> sys.stderr, 'Init embedding from pretrained.'
+            self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
+            self.__emb_size = pretrain_weights.shape[1]
+
+        self.__att_w = torch.nn.Parameter(torch.ones(hidden_size*2, hidden_size*2))
+
+        self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
                 dropout=dropout, 
                 num_layers=layer_num,
-                #num_layers=self.__layer_num, 
                 batch_first=True, 
                 bidirectional=True)
 
@@ -185,47 +212,64 @@ class V2_MatchAttention_Test(torch.nn.Module):
         #   hidden * 2 * 2
         #       2: bi-directional 
         #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*3, hidden_size, 
+        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
                 dropout=dropout, 
                 num_layers=out_layer_num, 
                 batch_first=True, 
                 bidirectional=True)
 
-        self.__dense = torch.nn.Sequential(
-                torch.nn.Linear(self.__hidden_size*2, 512),
+        self.__dense_start = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(512, 3)
-                )
+                torch.nn.Linear(256, 2) )
 
-    def cross_feature(self, c_emb, q_emb):
+        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
+                #dropout=dropout, 
+                num_layers=1, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_end = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 2) )
+
+    def cross_feature(self, c_emb, q_emb, w):
         # q_emb: (batch, qlen, emb)
         # c_emb: (batch, clen, emb)
+        # w: (emb, emb)
         # output: (batch, clen, emb)
+        batch, clen, _ = c_emb.shape
         q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
-        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
+        c_att_on_q = c_emb.bmm(w.expand(batch, self.__hidden_size*2, self.__hidden_size*2)).bmm(q_).softmax(dim=2)
+        #c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
         cq_emb = torch.bmm(c_att_on_q, q_emb)
         return cq_emb
 
-    def forward(self, q_emb, c_emb):
+    def forward(self, q_tok_id, c_tok_id):
+        q_emb = self.__embed(q_tok_id)
+        c_emb = self.__embed(c_tok_id)
+
         batch = c_emb.shape[0]
         seq_len = c_emb.shape[1] # batch, seq_len, hidden*bi
 
-        cq1 = self.cross_feature(c_emb, q_emb)
-
         q_out, _ = self.__rnn(q_emb)
         c_out, _ = self.__rnn(c_emb)
-        cq_out, _ = self.__rnn(cq1)
     
         # cross q/c
-        cq2 = self.cross_feature(c_out, q_out)
+        c2 = self.cross_feature(c_out, q_out, self.__att_w)
 
         # cat.
-        x = torch.cat((c_out, cq2, cq_out), dim=2) # batch, clen, (hidden*2+hidden*2+hidden*2)
+        x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
 
         # upper rnn.
         x, _ = self.__upper_rnn(x)
-        out = self.__dense(x)
-        return out
+
+        out_start = self.__dense_start(x)
+
+        out_end, _ = self.__rnn_end(x)
+        out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
+        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
 
 
@@ -404,87 +448,6 @@ class V2_2_BilinearAttention(torch.nn.Module):
         for p in self.__question_rnn.parameters():
             print p.grad
         '''
-
-
-class V2_1_MatchAttention_Binary_BilinearAttention(torch.nn.Module):
-    '''
-        ~55% on test 67% one-side (10E)
-    '''
-    def __init__(self, emb_size, hidden_size=512, layer_num=1, out_layer_num=2, dropout=0.4):
-        super(V2_1_MatchAttention_Binary_BilinearAttention, self).__init__()
-
-        self.__emb_size = emb_size
-        self.__hidden_size = hidden_size
-
-        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
-                dropout=dropout, 
-                num_layers=layer_num,
-                #num_layers=self.__layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__att_w = torch.nn.Parameter(torch.ones(hidden_size*2, hidden_size*2))
-
-        # input_size:
-        #   hidden * 2 * 2
-        #       2: bi-directional 
-        #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
-                dropout=dropout, 
-                num_layers=out_layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__dense_start = torch.nn.Sequential(
-                torch.nn.Linear(self.__hidden_size*2, 128),
-                torch.nn.ReLU(),
-                torch.nn.Linear(128, 2) )
-
-        self.__dense_end = torch.nn.Sequential(
-                torch.nn.Linear(self.__hidden_size*2, 128),
-                torch.nn.ReLU(),
-                torch.nn.Linear(128, 2) )
-
-    def cross_feature(self, c_emb, q_emb):
-        # q_emb: (batch, qlen, emb)
-        # c_emb: (batch, clen, emb)
-        # output: (batch, clen, emb)
-        batch, clen, _ = c_emb.shape
-        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
-        c_att_on_q = c_emb.bmm(self.__att_w.expand(batch, self.__hidden_size*2, self.__hidden_size*2)).bmm(q_).softmax(dim=2)
-        #c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
-        cq_emb = torch.bmm(c_att_on_q, q_emb)
-        return cq_emb
-
-    def forward(self, q_emb, c_emb):
-        batch = c_emb.shape[0]
-        seq_len = c_emb.shape[1] # batch, seq_len, hidden*bi
-
-        #c1 = self.cross_feature(c_emb, q_emb)
-
-        q_out, _ = self.__rnn(q_emb)
-        c_out, _ = self.__rnn(c_emb)
-    
-        # cross q/c
-        c2 = self.cross_feature(c_out, q_out)
-
-        # cat.
-        x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
-
-        # upper rnn.
-        x, _ = self.__upper_rnn(x)
-
-        out_start = self.__dense_start(x)
-        out_end = self.__dense_end(x)
-        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
-
-    def check_gradient(self):
-        pass
-        '''
-        for p in self.__question_rnn.parameters():
-            print p.grad
-        '''
-
 
 class V2_1_BiDafLike(torch.nn.Module):
     '''

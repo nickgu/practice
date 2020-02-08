@@ -173,19 +173,33 @@ def list_titles(reader):
     for title, doc in reader.iter_doc():
         print title.encode('gb18030') + ' (%s)' % len(doc)
 
-def check_conflict(reader):
-    stat_dict = {}
-    all = 0
-    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+def answer_length_distribution(squad_fn):
+    import torchtext 
+    import sys
+    import tqdm
+    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
+    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
+
+    reader = SquadReader(squad_fn)
+    dist = {}
+    total = 0
+    for title, context, qid, question, ans, is_impossible in tqdm.tqdm(reader.iter_instance()):
         if is_impossible:
             continue
-        c = context.count(ans[0]['text'])
-        all += 1
-        stat_dict[c] = stat_dict.get(c, 0) + 1
-
-    for n, x  in sorted(stat_dict.iteritems(), key=lambda x:-x[1]):
-        print n, x, '%.2f%%' % (x*100/all)
-
+        for a in ans:
+            toks = tokenizer(a['text'])
+            l = len(toks)
+            dist[l] = dist.get(l, 0) + 1
+            total += 1
+    
+    acc_perc = 0
+    for length, count in sorted(dist.iteritems(), key=lambda x:x[0])[:30]:
+        perc = count*100./total
+        acc_perc += perc
+        print 'length=%d\t%d\t%.1f%%\t%.1f%%' % (
+                length, count, perc, acc_perc)
+    
 def check_answer(answer_fn, squad_fn, output_fn):
     import torchtext 
     import sys

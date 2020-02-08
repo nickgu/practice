@@ -229,11 +229,16 @@ if __name__=='__main__':
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
     #model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
+
+    # on testing
+    #model = V3_BilinearAttention(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V3_BiDafLike(pretrain_weights=vocab.get_pretrained()).cuda()
+    model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # research model.
     #model = V3_Model(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Test(input_emb_size).cuda()
-    model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
     #model = V3_FCEmbModel(input_emb_size).cuda()
