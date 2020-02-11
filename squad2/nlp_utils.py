@@ -117,5 +117,20 @@ def u2a(s):
 def rand_init():
     return torch.randn(300) * 1e-3
 
+def init_tokenizer():
+    # basic english
+    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
+
+    # revtok
+    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
+    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
+
+    # spacy
+    #import spacy
+    #nlp = spacy.blank('en')
+    #tokenizer = lambda text:[t.text for t in nlp(text)]
+
+    return tokenizer
+
 if __name__=='__main__':
     pass

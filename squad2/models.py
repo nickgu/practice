@@ -5,6 +5,321 @@
 
 import torch
 import sys
+import torch.nn.utils.rnn as rnn_utils
+
+
+class V4_BiDafAdjust(torch.nn.Module):
+    '''
+    '''
+    def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=100, layer_num=1, out_layer_num=2, dropout=0.2):
+        super(V4_BiDafAdjust, self).__init__()
+        self.__hidden_size = hidden_size
+
+        if pretrain_weights is None:
+            print >> sys.stderr, 'Init embedding.'
+            self.__embed = torch.nn.Embedding(vocab_size, emb_size)
+            self.__emb_size = emb_size
+
+        else:
+            print >> sys.stderr, 'Init embedding from pretrained.'
+            self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
+            self.__emb_size = pretrain_weights.shape[1]
+
+        self.__emb_highway = torch.nn.Sequential(
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(self.__emb_size, self.__emb_size),
+                torch.nn.ReLU(),
+                torch.nn.Linear(self.__emb_size, self.__emb_size))
+
+        self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
+                dropout=dropout, 
+                num_layers=layer_num,
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__att_w = torch.nn.Sequential(
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(hidden_size*2*3, 1),
+                torch.nn.ReLU())
+        self.__g_width = hidden_size * 2 * 4
+
+        # input: g
+        self.__rnn_start = torch.nn.LSTM(self.__g_width, hidden_size, 
+                dropout=dropout, 
+                num_layers=out_layer_num, 
+                batch_first=True, 
+                bidirectional=True)
+
+        # input: (g, x_start)
+        self.__dense_start = torch.nn.Sequential(
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(self.__g_width+hidden_size*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 1) )
+
+        # input: (x_start)
+        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
+                #dropout=dropout, 
+                num_layers=1, 
+                batch_first=True, 
+                bidirectional=True)
+
+        # input: (g, x_end)
+        self.__dense_end = torch.nn.Sequential(
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(self.__g_width+hidden_size*2, 1),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 1) )
+
+    def bidaf_cross(self, c_emb, q_emb):
+        # q_emb: (batch, qlen, emb)
+        # c_emb: (batch, clen, emb)
+        # output: (batch, clen, emb)
+
+        batch, clen, embsize = c_emb.shape
+        qlen = q_emb.shape[1]
+
+        xx = c_emb.unsqueeze(2).expand(batch, clen, qlen, embsize)
+        yy = q_emb.unsqueeze(1).expand(batch, clen, qlen, embsize)
+        xy = xx * yy
+        out = torch.cat((xx, yy, xy), dim=3) # (batch, clen, qlen, embsize*3)
+
+        cq_att = self.__att_w(out).squeeze()
+        cq_emb = torch.bmm(cq_att, q_emb)
+        return cq_emb
+
+    def cross_feature(self, c_emb, q_emb):
+        # q_emb: (batch, qlen, emb)
+        # c_emb: (batch, clen, emb)
+        # output: (batch, clen, emb)
+        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
+        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
+        cq_emb = torch.bmm(c_att_on_q, q_emb)
+        return cq_emb
+
+    def qc_feature(self, c_emb, q_emb):
+        batch, clen, emb = c_emb.shape
+        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
+        cq_sim = c_emb.bmm(q_) # batch, clen, qlen
+        c_att = cq_sim.max(dim=2).values.softmax(dim=1) # batch, clen
+        c_emb_on_q = c_att.unsqueeze(1).bmm(c_emb) # batch, 1, emb
+        return c_emb_on_q.expand(batch, clen, emb)
+
+    def forward(self, q_tok_id, c_tok_id):
+        q_emb = self.__embed(q_tok_id)
+        #q_emb = q_emb + self.__emb_highway(q_emb)
+
+        c_emb = self.__embed(c_tok_id)
+        #c_emb = c_emb + self.__emb_highway(c_emb)
+
+        q_out, _ = self.__rnn(q_emb)
+        c_out, _ = self.__rnn(c_emb)
+    
+        # cross q/c
+        cq = self.bidaf_cross(c_out, q_out)
+        qc = self.qc_feature(c_out, q_out)
+        had_cq = c_out * cq
+        had_qc = c_out * qc
+
+        # cat.
+        g = torch.cat((c_out, cq, had_cq, had_qc), dim=2) # batch, clen, self.__g_width
+
+        # upper rnn.
+        x_start, _ = self.__rnn_start(g)
+        out_start = self.__dense_start(torch.cat((g, x_start), dim=2))
+
+        x_end, _ = self.__rnn_end(x_start)
+        out_end = self.__dense_end(torch.cat((g, x_end), dim=2))
+
+        return torch.cat( (out_start.permute(0,2,1), out_end.permute(0,2,1)), dim=1 )
+
+class V4_MatchAttention_PadLSTM(torch.nn.Module):
+    '''
+        Classification on whole output.
+    '''
+    def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
+        super(V4_MatchAttention_PadLSTM, self).__init__()
+        self.__hidden_size = hidden_size
+
+        if pretrain_weights is None:
+            print >> sys.stderr, 'Init embedding.'
+            self.__embed = torch.nn.Embedding(vocab_size, emb_size)
+            self.__emb_size = emb_size
+
+        else:
+            print >> sys.stderr, 'Init embedding from pretrained.'
+            self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
+            self.__emb_size = pretrain_weights.shape[1]
+
+        self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
+                dropout=dropout, 
+                num_layers=layer_num,
+                batch_first=True, 
+                bidirectional=True)
+
+        # input_size:
+        #   hidden * 2 * 2
+        #       2: bi-directional 
+        #       2: (c_out + cq_attention)
+        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
+                dropout=dropout, 
+                num_layers=out_layer_num, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_start = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 1) )
+
+        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
+                dropout=dropout, 
+                num_layers=1, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_end = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 1) )
+
+    def cross_feature(self, c_emb, q_emb):
+        # q_emb: (batch, qlen, emb)
+        # c_emb: (batch, clen, emb)
+        # output: (batch, clen, emb)
+        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
+        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
+        cq_emb = torch.bmm(c_att_on_q, q_emb)
+        return cq_emb
+
+    def forward(self, q_tok_id, c_tok_id, q_acture_len, c_acture_len):
+        def call_lstm(lstm, x, x_length):
+            x_ = rnn_utils.pack_padded_sequence(x, x_length, batch_first=True, enforce_sorted=False)
+            y, _ = lstm(x_)
+            y, yl = rnn_utils.pad_packed_sequence(y, batch_first=True)
+            return y, _
+
+        q_emb = self.__embed(q_tok_id)
+        c_emb = self.__embed(c_tok_id)
+
+        q_out, _ = call_lstm(self.__rnn, q_emb, q_acture_len)
+        c_out, _ = call_lstm(self.__rnn, c_emb, c_acture_len)
+    
+        # cross q/c
+        cq = self.cross_feature(c_out, q_out)
+
+        # cat.
+        x = torch.cat((c_out, cq), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
+
+        # upper rnn.
+        x, _ = call_lstm(self.__upper_rnn, x, c_acture_len)
+
+        out_start = self.__dense_start(x)
+
+        out_end, _ = self.__rnn_end(x)
+        out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
+
+        # return shape (batch, 2, clen)
+        return torch.cat( (out_start.permute(0,2,1), out_end.permute(0,2,1)), dim=1 )
+
+
+
+
+class V3_CharCNN_MatAtt(torch.nn.Module):
+    '''
+    '''
+    def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
+        super(V3_CharCNN_MatAtt, self).__init__()
+        self.__hidden_size = hidden_size
+
+        if pretrain_weights is None:
+            print >> sys.stderr, 'Init embedding.'
+            self.__embed = torch.nn.Embedding(vocab_size, emb_size)
+            self.__emb_size = emb_size
+
+        else:
+            print >> sys.stderr, 'Init embedding from pretrained.'
+            self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
+            self.__emb_size = pretrain_weights.shape[1]
+
+
+        self.__token_L = 16
+        self.__char_emb_size = 16
+        self.__char_emb_outsize = 32
+        self.__charemb = torch.nn.EmbeddingBag(70001, self.__char_emb_outsize, mode='sum')
+
+        self.__rnn = torch.nn.LSTM(self.__emb_size+self.__char_emb_outsize, hidden_size, 
+                dropout=dropout, 
+                num_layers=layer_num,
+                batch_first=True, 
+                bidirectional=True)
+
+        # input_size:
+        #   hidden * 2 * 2
+        #       2: bi-directional 
+        #       2: (c_out + cq_attention)
+        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
+                dropout=dropout, 
+                num_layers=out_layer_num, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_start = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 2) )
+
+        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
+                #dropout=dropout, 
+                num_layers=1, 
+                batch_first=True, 
+                bidirectional=True)
+
+        self.__dense_end = torch.nn.Sequential(
+                torch.nn.Linear(self.__hidden_size*2*2, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 2) )
+
+    def cross_feature(self, c_emb, q_emb):
+        # q_emb: (batch, qlen, emb)
+        # c_emb: (batch, clen, emb)
+        # output: (batch, clen, emb)
+        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
+        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
+        cq_emb = torch.bmm(c_att_on_q, q_emb)
+        return cq_emb
+
+    def forward(self, q_tok_id, c_tok_id, q_char_x, c_char_x):
+        qlen = q_char_x.shape[1]
+        batch, clen, tok_len = c_char_x.shape
+
+        q_char_emb = self.__charemb(q_char_x.reshape(batch*qlen, -1)).reshape(batch, qlen, -1)
+        #q_char_emb = self.__charcnn(q_char_emb.reshape(batch*qlen, 1, tok_len, self.__char_emb_size)).reshape(batch, qlen, -1)
+        c_char_emb = self.__charemb(c_char_x.reshape(batch*clen, -1)).reshape(batch, clen, -1)
+        #c_char_emb = self.__charemb(c_char_x)
+        #c_char_emb = self.__charcnn(c_char_emb.reshape(batch*clen, 1, tok_len, self.__char_emb_size)).reshape(batch, clen, -1)
+
+        q_emb = self.__embed(q_tok_id)
+        c_emb = self.__embed(c_tok_id)
+
+        q_out, _ = self.__rnn(torch.cat((q_emb, q_char_emb), dim=2))
+        c_out, _ = self.__rnn(torch.cat((c_emb, c_char_emb), dim=2))
+    
+        # cross q/c
+        c2 = self.cross_feature(c_out, q_out)
+
+        # cat.
+        x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
+
+        # upper rnn.
+        x, _ = self.__upper_rnn(x)
+
+        out_start = self.__dense_start(x)
+
+        out_end, _ = self.__rnn_end(x)
+        out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
+        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
+
 
 class V3_DropoutMatchAttention(torch.nn.Module):
     '''
@@ -94,91 +409,6 @@ class V3_DropoutMatchAttention(torch.nn.Module):
         out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
         return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
-
-class V3_BiDafLike(torch.nn.Module):
-    '''
-    '''
-    def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, hidden_size=128, layer_num=1, out_layer_num=2, dropout=0.2):
-        super(V3_BiDafLike, self).__init__()
-        self.__hidden_size = hidden_size
-
-        if pretrain_weights is None:
-            print >> sys.stderr, 'Init embedding.'
-            self.__embed = torch.nn.Embedding(vocab_size, emb_size)
-            self.__emb_size = emb_size
-
-        else:
-            print >> sys.stderr, 'Init embedding from pretrained.'
-            self.__embed = torch.nn.Embedding.from_pretrained(pretrain_weights)
-            self.__emb_size = pretrain_weights.shape[1]
-
-        self.__rnn = torch.nn.LSTM(self.__emb_size, hidden_size, 
-                dropout=dropout, 
-                num_layers=layer_num,
-                batch_first=True, 
-                bidirectional=True)
-
-        # input_size:
-        #   hidden * 2 * 2
-        #       2: bi-directional 
-        #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*3, hidden_size, 
-                dropout=dropout, 
-                num_layers=out_layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__dense_start = torch.nn.Sequential(
-                torch.nn.Linear(self.__hidden_size*2, 256),
-                torch.nn.ReLU(),
-                torch.nn.Linear(256, 2) )
-
-        self.__rnn_end =  torch.nn.LSTM(hidden_size*2, hidden_size, 
-                #dropout=dropout, 
-                num_layers=1, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__dense_end = torch.nn.Sequential(
-                torch.nn.Linear(self.__hidden_size*2*2, 256),
-                torch.nn.ReLU(),
-                torch.nn.Linear(256, 2) )
-
-    def cross_feature(self, c_emb, q_emb):
-        # q_emb: (batch, qlen, emb)
-        # c_emb: (batch, clen, emb)
-        # output: (batch, clen, emb)
-        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
-        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
-        cq_emb = torch.bmm(c_att_on_q, q_emb)
-        return cq_emb
-
-    def forward(self, q_tok_id, c_tok_id):
-        q_emb = self.__embed(q_tok_id)
-        c_emb = self.__embed(c_tok_id)
-
-        batch = c_emb.shape[0]
-        clen = c_emb.shape[1] # batch, clen, hidden*bi
-
-        q_out, _ = self.__rnn(q_emb)
-        c_out, _ = self.__rnn(c_emb)
-    
-        # cross q/c
-        cq = self.cross_feature(c_out, q_out)
-        qc = self.cross_feature(q_out, c_out)
-        qtilt = qc.sum(dim=1).unsqueeze(dim=1).expand(batch, clen, -1)
-
-        # cat.
-        x = torch.cat((c_out, cq, qtilt), dim=2) # batch, clen, (d*2 + d*2 + d*2)
-
-        # upper rnn.
-        x, _ = self.__upper_rnn(x)
-
-        out_start = self.__dense_start(x)
-
-        out_end, _ = self.__rnn_end(x)
-        out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
-        return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
 
 
 class V3_BilinearAttention(torch.nn.Module):
@@ -270,8 +500,6 @@ class V3_BilinearAttention(torch.nn.Module):
         out_end, _ = self.__rnn_end(x)
         out_end = self.__dense_end( torch.cat((x, out_end), dim=2) )
         return torch.cat( (out_start.unsqueeze(2), out_end.unsqueeze(2)), dim=2 )
-
-
 
 #################################################################################################################3
 
@@ -373,164 +601,6 @@ class V1_CatLstm(torch.nn.Module):
     def check_gradient(self):
         for p in self.__question_rnn.parameters():
             print p.grad
-
-
-class V2_2_BilinearAttention(torch.nn.Module):
-    '''
-        ~55% on test 67% one-side (10E)
-    '''
-    def __init__(self, emb_size, hidden_size=512, layer_num=1, out_layer_num=2, dropout=0.4):
-        super(V2_2_BilinearAttention, self).__init__()
-
-        self.__emb_size = emb_size
-        self.__hidden_size = hidden_size
-
-        self.__att_w = torch.nn.Parameter(torch.ones(hidden_size*2, hidden_size*2))
-
-        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
-                dropout=dropout, 
-                num_layers=layer_num,
-                #num_layers=self.__layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        # input_size:
-        #   hidden * 2 * 2
-        #       2: bi-directional 
-        #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*2, hidden_size, 
-                dropout=dropout, 
-                num_layers=out_layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__fc = torch.nn.Linear(self.__hidden_size*2, 128)
-        self.__fc_2 = torch.nn.Linear(128, 3)
-
-    def cross_feature(self, c_emb, q_emb):
-        # q_emb: (batch, qlen, emb)
-        # c_emb: (batch, clen, emb)
-        # output: (batch, clen, emb)
-        batch, clen, _ = c_emb.shape
-        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
-        c_att_on_q = c_emb.bmm(self.__att_w.expand(batch, self.__hidden_size*2, self.__hidden_size*2)).bmm(q_).softmax(dim=2)
-        #c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
-        cq_emb = torch.bmm(c_att_on_q, q_emb)
-        return cq_emb
-
-
-    def forward(self, q_emb, c_emb):
-        batch = c_emb.shape[0]
-        seq_len = c_emb.shape[1] # batch, seq_len, hidden*bi
-
-        #c1 = self.cross_feature(c_emb, q_emb)
-
-        q_out, _ = self.__rnn(q_emb)
-        c_out, _ = self.__rnn(c_emb)
-    
-        # cross q/c
-        c2 = self.cross_feature(c_out, q_out)
-
-        # cat.
-        x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
-
-        # upper rnn.
-        x, _ = self.__upper_rnn(x)
-
-        out = self.__fc(x)
-        out = torch.relu(out)
-        out = self.__fc_2(out)
-        return out
-
-    def check_gradient(self):
-        pass
-        '''
-        for p in self.__question_rnn.parameters():
-            print p.grad
-        '''
-
-class V2_1_BiDafLike(torch.nn.Module):
-    '''
-        ?
-    '''
-    def __init__(self, emb_size, hidden_size=256, layer_num=1, out_layer_num=2, dropout=0.4):
-        super(V2_1_BiDafLike, self).__init__()
-
-        self.__emb_size = emb_size
-        self.__hidden_size = hidden_size
-
-        self.__rnn = torch.nn.LSTM(emb_size, hidden_size, 
-                dropout=dropout, 
-                num_layers=layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        # input_size:
-        #   hidden * 2 * 2
-        #       2: bi-directional 
-        #       2: (c_out + cq_attention)
-        self.__upper_rnn = torch.nn.LSTM(hidden_size*2*3, hidden_size, 
-                dropout=dropout, 
-                num_layers=out_layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__fc = torch.nn.Linear(self.__hidden_size*2, self.__hidden_size)
-
-        self.__end_rnn = torch.nn.LSTM(self.__hidden_size, hidden_size, 
-                dropout=dropout, 
-                num_layers=layer_num, 
-                batch_first=True, 
-                bidirectional=True)
-
-        self.__fc_out = torch.nn.Linear(self.__hidden_size*3, 3)
-
-    def cross_feature(self, c_emb, q_emb):
-        # q_emb: (batch, qlen, emb)
-        # c_emb: (batch, clen, emb)
-        # output: (batch, clen, emb)
-        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
-        cq_matrix = c_emb.bmm(q_)
-        
-        cq_att = cq_matrix.softmax(dim=2) # batch, clen, qlen
-        cq_emb = torch.bmm(cq_matrix, q_emb)
-
-        # batch, clen
-        batch, clen, emb_size = c_emb.shape
-        qc_att = cq_matrix.max(dim=2).values.softmax(dim=1)
-        qc_emb = qc_att.unsqueeze(1).bmm(c_emb).expand(batch, clen, emb_size)
-        return torch.cat( (cq_emb, qc_emb), dim=2 )
-
-    def forward(self, q_emb, c_emb):
-        batch = c_emb.shape[0]
-        seq_len = c_emb.shape[1] # batch, seq_len, hidden*bi
-
-        q_out, _ = self.__rnn(q_emb)
-        c_out, _ = self.__rnn(c_emb)
-    
-        # cross q/c
-        c2 = self.cross_feature(c_out, q_out)
-
-        # cat.
-        x = torch.cat((c_out, c2), dim=2) # batch, clen, (rnn_out_size + emb + hidden*2)
-
-        # upper rnn.
-        x, _ = self.__upper_rnn(x)
-
-        out = self.__fc(x)
-        out = torch.relu(out)
-
-        end_rnn_out, _ = self.__end_rnn(out)
-        y = self.__fc_out( torch.cat( (out, end_rnn_out), dim=2 ) )  # batch, clen, (hidden + hidden * 2)
-        return y
-
-    def check_gradient(self):
-        pass
-        '''
-        for p in self.__question_rnn.parameters():
-            print p.grad
-        '''
-
 
 class V3_CrossConv(torch.nn.Module):
     '''

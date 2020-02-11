@@ -9,12 +9,16 @@ import unicodedata
 import string
 import fire
 import pydev
+import torch
+import nlp_utils
 
 class SquadData:
     def __init__(self, data_name='SQuAD data'):
         self.data_name = data_name
         self.qtoks = []
         self.ctoks = []
+        self.qchar = []
+        self.cchar = []
         self.triple_output = []
         self.binary_output = []
         self.answer_range = []
@@ -22,11 +26,14 @@ class SquadData:
 
     def shuffle(self):
         import random
-        shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, \
-                self.output, self.answer_range, self.answer_candidates)
-        random.shuffle(shuf)
-        self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.output, \
-                self.answer_range, self.answer_candidates = zip(*shuf)
+        if len(self.qchar)==0:
+            shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates)
+            random.shuffle(shuf)
+            self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates = zip(*shuf)
+        else:
+            shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates, self.qchar, self.cchar)
+            random.shuffle(shuf)
+            self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates, self.qchar, self.cchar = zip(*shuf)
 
 class SquadReader():
     def __init__(self, filename):
@@ -66,8 +73,14 @@ class SquadReader():
                     is_impossible = qa.get('is_impossible', False)
                     yield qid, question, ans, is_impossible
 
-def load_data(reader, tokenizer, data_name=None, limit_count=None):
-    import torch
+
+def padtoken(token):
+    L=16
+    token = (token + u'\0'*L)[:L]
+    ret = map(lambda c:min(69999, ord(c)), token)
+    return ret
+
+def load_data(reader, tokenizer, data_name=None, limit_count=None, read_char=False):
     squad_data = SquadData(data_name)
 
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
@@ -99,23 +112,30 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
             context_tokens += tokenizer(a)
             answer_token_begin = len(context_tokens)
             context_tokens += tokenizer(b)
+            # end is the ending position. not+1
             answer_token_end = len(context_tokens)
             context_tokens += tokenizer(c)
         else:
             context_tokens = tokenizer(context)
             print >> sys.stderr, 'Mismatch on answer finding..'
 
-        #context_tokens.append('<end>')
+        context_tokens.append('<end>') # add a extra token.
         question_tokens = tokenizer(question)
 
         qt = []
         ct = []
+        qchar = []
+        cchar = []
         c_out = []
         b_out = []
         for tok in question_tokens:
             qt.append(tok)
+            if read_char:
+                qchar.append(padtoken(tok))
         for idx, tok in enumerate(context_tokens):
             ct.append(tok)
+            if read_char:
+                cchar.append(padtoken(tok))
             if idx == answer_token_begin:
                 c_out.append(1)
                 b_out.append((1,0))
@@ -128,6 +148,9 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
 
         squad_data.qtoks.append(qt)
         squad_data.ctoks.append(ct)
+        if read_char:
+            squad_data.qchar.append(torch.tensor(qchar))
+            squad_data.cchar.append(torch.tensor(cchar))
         squad_data.triple_output.append(torch.tensor(c_out))
         squad_data.binary_output.append(torch.tensor(b_out))
         squad_data.answer_range.append( (answer_token_begin, answer_token_end) )
@@ -147,10 +170,7 @@ def debug_length(squad_fn):
     maxn = 0
     maxq = None
 
-    import torchtext 
-    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
-    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
-
+    tokenizer = nlp_utils.init_tokenizer()
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
         l = len(question)
         s = len(question.split(' '))
@@ -177,10 +197,8 @@ def answer_length_distribution(squad_fn):
     import torchtext 
     import sys
     import tqdm
-    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
-    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
-    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
 
+    tokenizer = nlp_utils.init_tokenizer()
     reader = SquadReader(squad_fn)
     dist = {}
     total = 0
@@ -204,25 +222,31 @@ def check_answer(answer_fn, squad_fn, output_fn):
     import torchtext 
     import sys
     import tqdm
-    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
-    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
-    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
 
+    tokenizer = nlp_utils.init_tokenizer()
     answer_fd = file(answer_fn)
     answers = []
     for row in pydev.foreach_row(file(answer_fn)):
-        if len(row)!=3:
+        if len(row)!=6:
             break
-        pred, tgt, total = row
+        pred, tgt, tag, pratio, py_, py = row
+        pratio = float(pratio)
+        py_ = float(py_)
+        py = float(py)
         ps, pe = map(lambda x:int(x), pred.split(','))
         ts, te = map(lambda x:int(x), tgt.split(','))
-        answers.append(((ps, pe), (ts, te)))
+        answers.append(((ps, pe), (ts, te), tag, pratio, py_, py))
     print >> sys.stderr, 'answer loaded.'
 
     reader = SquadReader(squad_fn)
     output = file(output_fn, 'w')
     idx = 0
-    for title, context, qid, question, ans, is_impossible in tqdm.tqdm(reader.iter_instance()):
+    n_EM = 0
+    n_SM = 0
+    n_SM_B = 0
+    n_SM_E = 0
+    bar = tqdm.tqdm(reader.iter_instance())
+    for title, context, qid, question, ans, is_impossible in bar:
         if is_impossible:
             continue
         if idx >= len(answers):
@@ -230,7 +254,7 @@ def check_answer(answer_fn, squad_fn, output_fn):
         
         qtoks = tokenizer(question)
         ctoks = tokenizer(context)
-        ans_info = answers[idx]
+        ans_y_, ans_y, tag, p_ratio, p_y_, p_y = answers[idx]
 
         print >> output, '\n## ID=%d ##\n%s' % (idx, '='*100)
         print >> output, '== Context =='
@@ -242,21 +266,44 @@ def check_answer(answer_fn, squad_fn, output_fn):
         print >> output, '== Question Tokens =='
         print >> output, (u','.join(qtoks)).encode('utf8')
         print >> output, '== Expected answer =='
-        print >> output, 'rec: ' + u' '.join(ctoks[ans_info[1][0]:ans_info[1][1]]).encode('utf8')
-        print >> output, '(%d, %d)' % (ans_info[1][0], ans_info[1][1])
+        print >> output, 'rec: ' + u' '.join(ctoks[ans_y[0]:ans_y[1]]).encode('utf8')
+        print >> output, '(%d, %d)' % (ans_y[0], ans_y[1])
         for a in ans:
             print >> output, '%s (%d)' % (a['text'].encode('utf8'), a['answer_start'])
         print >> output, '== Predict output =='
-        print >> output, u' '.join(ctoks[ans_info[0][0]:ans_info[0][1]]).encode('utf8')
-        print >> output, '(%d, %d)' % (ans_info[0][0], ans_info[0][1])
-        if ans_info[0] == ans_info[1]:
+        print >> output, u' '.join(ctoks[ans_y_[0]:ans_y_[1]]).encode('utf8')
+        print >> output, '(%d, %d)' % (ans_y_[0], ans_y_[1])
+
+        # match candidate or both side match.
+        em = False
+        if ans_y_ == ans_y:
+            em = True
+        adjust_answer = u''.join(ctoks[ans_y_[0]:ans_y_[1]]).replace(u' ', u'')
+        for a in ans:
+            aa = a['text'].replace(u' ', u'')
+            if aa == adjust_answer:
+                em = True
+                break
+
+        if em:
             print >> output, ' ## ExactMatch!'
-        elif ans_info[0][0] == ans_info[1][0] or ans_info[0][1]==ans_info[1][1]:
-            print >> output, ' ## SideMatch!'
+            n_EM += 1
+        elif ans_y_[0] == ans_y[0] or ans_y_[1]==ans_y[1]:
+            print >> output, (' ## SideMatch! [%s]' % tag)
+            n_SM += 1
+            if tag == 'SM_B': n_SM_B += 1
+            if tag == 'SM_E': n_SM_E += 1
         else:
             print >> output, ' ## Wrong!'
+        print >> output, 'p_ratio=%.3f, p_y_=%.5f, p_y=%.5f' % (p_ratio, p_y_, p_y)
 
         idx += 1
+        bar.set_description('EM=%.1f%%(%d), SM=%.1f%%, B=%.1f%%, E=%.1f%%, N=%d' % (
+            n_EM * 100. / idx, n_EM,
+            n_SM * 100. / idx,
+            n_SM_B * 100. / idx, n_SM_E * 100. / idx,
+            idx
+            ))
         
 
 if __name__=='__main__':

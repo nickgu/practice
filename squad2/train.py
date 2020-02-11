@@ -3,6 +3,7 @@
 # author: nickgu 
 # 
 
+import time
 import squad_reader
 import torch
 import torchtext 
@@ -54,7 +55,8 @@ class RunConfigBinary:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 100.]).cuda())
 
-    def loss(self, predict, target):
+    def loss(self, predict, data, beg, end):
+        target = data.binary_output[beg:end]
         batch_context_output = rnn_utils.pad_sequence(target, batch_first=True).detach().cuda()
         l = self.__criterion(predict.view(-1,2), batch_context_output.view([-1]))
         return l
@@ -65,26 +67,41 @@ class RunConfigBinary:
         prob = y[:,:,:,1:].squeeze()
         return dp_to_generate_answer_range(prob)
 
-    def adjust_data(self, data):
-        data.output = data.binary_output
-          
+    def access(self, y, batch_idx, s0e1, pos):
+        return y[batch_idx][pos][s0e1][1]
 
 class RunConfigTriple:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1., 50., 50.]).cuda())
 
-    def loss(self, predict, target):
+    def loss(self, predict, data, beg, end):
+        target = data.triple_output[beg:end]
         batch_context_output = rnn_utils.pad_sequence(target, batch_first=True).detach().cuda()
         l = self.__criterion(predict.view(-1,3), batch_context_output.view([-1]))
         return l
 
-    def get_ans_range(self, y):
+    def p(self, y):
         #return y.permute((0,2,1)).max(dim=2).indices[:,1:]
         prob = y[:,:,1:]
         return dp_to_generate_answer_range(prob)
 
-    def adjust_data(self, data):
-        data.output = data.triple_output
+class RunConfigSeqBinary:
+    def __init__(self):
+        self.__criterion = torch.nn.CrossEntropyLoss()
+
+    def loss(self, predict, data, beg, end):
+        target = data.answer_range[beg:end]
+        batch_context_output = torch.tensor(target).cuda()
+        batch = batch_context_output.shape[0]
+        l = self.__criterion(predict.view(batch*2,-1), batch_context_output.view([-1]))
+        return l
+
+    def get_ans_range(self, y):
+        prob = y.permute(0,2,1)
+        return dp_to_generate_answer_range(prob)
+
+    def p(self, y, batch_idx, s0e1, pos):
+        return y[batch_idx][s0e1][pos]
 
 
 def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None):
@@ -101,7 +118,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
             batch_qt = data.qtoks[s:s+batch_size]
             batch_ct = data.ctoks[s:s+batch_size]
-            if runconfig.embedding_trainable:
+            if runconfig.input_token_id:
                 batch_ques_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
                 batch_cont_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
@@ -110,23 +127,35 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 batch_cont_x = rnn_utils.pad_sequence([vocab.get_vecs_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
             batch, clen = batch_cont_x.shape[:2]
-            y = rnn_utils.pad_sequence(data.output[s:s+batch_size], batch_first=True)
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
-            y_ = model(batch_ques_x, batch_cont_x)
+            if runconfig.input_char:
+                # for char in.
+                batch_ques_char_x = rnn_utils.pad_sequence(data.qchar[s:s+batch_size], batch_first=True).detach().cuda()
+                batch_cont_char_x = rnn_utils.pad_sequence(data.cchar[s:s+batch_size], batch_first=True).detach().cuda()
+                y_ = model(batch_ques_x, batch_cont_x, batch_ques_char_x, batch_cont_char_x)
 
-            l = runconfig.loss(y_, y)
+            elif runconfig.input_acture_len:
+                q_acture_len = list(map(lambda x:len(x), batch_qt))
+                c_acture_len = list(map(lambda x:len(x), batch_ct))
+                y_ = model(batch_ques_x, batch_cont_x, q_acture_len, c_acture_len)
+
+            else:
+                y_ = model(batch_ques_x, batch_cont_x)
+
+            l = runconfig.loss(y_, data, s, s+batch_size)
             step += 1
             loss += l.item()
 
+            # seems conflict?
+            y_ = y_.softmax(dim=-1)
             ans = runconfig.get_ans_range(y_)
             for idx, ((a,b), (c,d)) in enumerate(zip(ans, data.answer_range[s:s+batch_size])):
-                if answer_output:
-                    print >> answer_output, '%d,%d\t%d,%d\t%d' % (a,b,c,d, len(data.ctoks[s+idx]))
                 # test one side.
                 count += 1
 
+                tag = 'Wr'
                 em = False
                 if a==c and b==d:
                     em = True
@@ -139,14 +168,25 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                             em = True
                 if em:
                     exact_match += 1
+                    tag = 'EM'
 
                 if a==c or b==d:
                     one_side_match += 1
+                    if tag != 'EM':
+                        if a==c: tag = 'SM_B'
+                        else: tag = 'SM_E'
                 if a==c:
                     side_match += 1
                 if b==d:
                     side_match += 1
 
+                if answer_output:
+                    # for binary.
+                    p_y_ = (runconfig.p(y_,idx,0,a)*runconfig.p(y_,idx,1,b)).item()
+                    p_y = (runconfig.p(y_,idx,0,c)*runconfig.p(y_,idx,1,d)).item()
+                    p_ratio = p_y / p_y_
+                    print >> answer_output, '%d,%d\t%d,%d\t%s\t%.3f\t%f\t%f' % (
+                            a,b,c,d, tag, p_ratio, p_y_, p_y)
 
         info = '#(%s) EM=%.2f%% (%d/%d), SM=%.2f%%, OSM=%.2f%% Loss=%.5f' % (
                 data.data_name,
@@ -184,19 +224,26 @@ def preheat(vocab, *args):
         for sentence in doc:
             vocab.preheat(sentence)
     print >> sys.stderr, 'Pre-heat over', vocab.cache_size()
+
+def fix_model():
+    #np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     
 if __name__=='__main__':
     arg = pydev.Arg('SQuAD data training program with pytorch.')
     arg.str_opt('epoch', 'e', default='200')
     arg.str_opt('batch', 'b', default='64')
     arg.str_opt('test_epoch', 't', default='5')
-    arg.str_opt('logname', 'L', default='log.txt')
+    arg.str_opt('logname', 'L', default='<auto>')
     arg.str_opt('save', 's', default='params/temp_model.pkl')
+    arg.bool_opt('shuffle', 'S')
     arg.bool_opt('continue_training', 'c')
     arg.bool_opt('test_mode', 'T')
     opt = arg.init_arg()
-
-    logger = file(opt.logname, 'w')
+    fix_model()
 
     # hyper-param.
     epoch_count = int(opt.epoch)
@@ -210,7 +257,6 @@ if __name__=='__main__':
     print >> sys.stderr, 'epoch=%d' % epoch_count
     print >> sys.stderr, 'test_epoch=%d' % test_epoch
     print >> sys.stderr, 'batch_size=%d' % batch_size
-    print >> sys.stderr, 'log_filename=%s' % opt.logname
     print >> sys.stderr, 'save_model=%s' % opt.save
     print >> sys.stderr, 'continue_training=%s' % opt.continue_training
 
@@ -222,33 +268,46 @@ if __name__=='__main__':
     input_emb_size = 400
 
     #runconfig = RunConfigTriple()
-    runconfig = RunConfigBinary()
-    #runconfig.embedding_trainable = False
-    runconfig.embedding_trainable = True
+    #runconfig = RunConfigBinary()
+    runconfig = RunConfigSeqBinary()
+
+    runconfig.input_token_id = True
+    runconfig.input_char = False
+    runconfig.input_acture_len = False
 
     # milestones model.
     #model = V2_MatchAttention(input_emb_size).cuda()
     #model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
+    model = V3_MatchAttention_OutputAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # on testing
+    #model = V4_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V4_MatchAttention_PadLSTM(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_BilinearAttention(pretrain_weights=vocab.get_pretrained()).cuda()
-    #model = V3_BiDafLike(pretrain_weights=vocab.get_pretrained()).cuda()
-    model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V3_CharCNN_MatAtt(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # research model.
-    #model = V3_Model(pretrain_weights=vocab.get_pretrained()).cuda()
-    #model = V2_MatchAttention_Test(input_emb_size).cuda()
     #model = V0_Encoder(ider.size(), input_emb_size, hidden_size)
     #model = V1_CatLstm(input_emb_size, hidden_size, layer_num=layer_num, dropout=0.4)
-    #model = V3_FCEmbModel(input_emb_size).cuda()
-    #model = V2_2_BilinearAttention(input_emb_size).cuda()
-    #model = V2_1_BiDafLike(input_emb_size).cuda()
     #model = V3_CrossConv().cuda()
     #model = V4_Transformer(input_emb_size).cuda()
 
-    print >> sys.stderr, ' == INIT_MODEL : %s ==' % (type(model).__name__)
+    model_name = type(model).__name__
+    print >> sys.stderr, ' == INIT_MODEL : %s ==' % (model_name)
     print >> sys.stderr, ' == model_size: ', easy_train.model_params_size(model), ' =='
+
+    if opt.logname == '<auto>':
+        ts = time.strftime('%Y%m%d_%H:%M:%S',time.localtime(time.time()))
+        test_tag = ''
+        if opt.test_mode:
+            test_tag = 'TEST_'
+        logname = 'log/all/%s%s_%s_log'% (test_tag, model_name, ts)
+    else:
+        logname = opt.logname
+    logger = file(logname, 'w')
+    print >> sys.stderr, 'log_filename=%s' % logname
 
     if opt.continue_training:
         print >> sys.stderr, 'prepare to load previous model.'
@@ -267,25 +326,20 @@ if __name__=='__main__':
     print >> sys.stderr, 'train: [%s]' % train_filename
     print >> sys.stderr, 'test: [%s]' % test_filename
 
-    #tokenizer = torchtext.data.utils.get_tokenizer('basic_english') 
-    tk = torchtext.data.utils.get_tokenizer('revtok') # case sensitive.
-    tokenizer = lambda s: map(lambda u:u.strip(), tk(s))
+    tokenizer = nlp_utils.init_tokenizer()
 
     train_reader = squad_reader.SquadReader(train_filename)
     test_reader = squad_reader.SquadReader(test_filename)
 
-    train = squad_reader.load_data(train_reader, tokenizer, data_name='Train', limit_count=load_size[0])
-    test = squad_reader.load_data(test_reader, tokenizer, data_name='Test', limit_count=load_size[1])
-    runconfig.adjust_data(train)
-    runconfig.adjust_data(test)
+    train = squad_reader.load_data(train_reader, tokenizer, data_name='Train', limit_count=load_size[0], read_char=runconfig.input_char)
+    test = squad_reader.load_data(test_reader, tokenizer, data_name='Test', limit_count=load_size[1], read_char=runconfig.input_char)
     print >> sys.stderr, 'Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks))
 
     # shuffle training data.
-    '''
-    print >> sys.stderr, 'begin to shuffle training data..'
-    train.shuffle()
-    print >> sys.stderr, 'shuffle ok.'
-    '''
+    if opt.shuffle:
+        print >> sys.stderr, 'begin to shuffle training data..'
+        train.shuffle()
+        print >> sys.stderr, 'shuffle ok.'
 
     # pre-heat.
     preheat(vocab, train.qtoks, train.ctoks, test.qtoks, test.ctoks)
@@ -304,7 +358,7 @@ if __name__=='__main__':
 
             batch_qt = train.qtoks[s:s+batch_size]
             batch_ct = train.ctoks[s:s+batch_size]
-            if runconfig.embedding_trainable:
+            if runconfig.input_token_id:
                 batch_ques_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_qt], batch_first=True).detach().cuda()
                 batch_cont_x = rnn_utils.pad_sequence([vocab.get_ids_by_tokens(toks) for toks in batch_ct], batch_first=True).detach().cuda()
 
@@ -314,9 +368,20 @@ if __name__=='__main__':
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
-            y = train.output[s:s+batch_size]
-            y_ = model(batch_ques_x, batch_cont_x)
-            l = runconfig.loss(y_, y)
+            if runconfig.input_char:
+                # for char in.
+                batch_ques_char_x = rnn_utils.pad_sequence(train.qchar[s:s+batch_size], batch_first=True).detach().cuda()
+                batch_cont_char_x = rnn_utils.pad_sequence(train.cchar[s:s+batch_size], batch_first=True).detach().cuda()
+                y_ = model(batch_ques_x, batch_cont_x, batch_ques_char_x, batch_cont_char_x)
+            elif runconfig.input_acture_len:
+                q_acture_len = list(map(lambda x:len(x), batch_qt))
+                c_acture_len = list(map(lambda x:len(x), batch_ct))
+                y_ = model(batch_ques_x, batch_cont_x, q_acture_len, c_acture_len)
+
+            else:
+                y_ = model(batch_ques_x, batch_cont_x)
+
+            l = runconfig.loss(y_, train, s, s+batch_size)
 
             step += 1
             loss += l.item()
@@ -327,16 +392,22 @@ if __name__=='__main__':
 
         print >> logger, 'epoch=%d\tloss=%.5f' % (epoch, loss/step)
 
-        if test_epoch>0:
-            if (epoch+1) % test_epoch ==0:
+
+        # run test on Test each epoch.
+        test_out = file('log/ans/test.ans.out', 'w')
+        run_test(runconfig, model, test, batch_size, logger, test_out)
+        test_out.close()
+
+        # run test on Train each test_epoch or first epoch.
+        if test_epoch>0 or epoch == 0:
+            if (epoch+1) % test_epoch ==0 or epoch == 0:
                 print >> logger, 'TestEpoch %d:' % epoch
                 train_out = file('log/ans/train.ans.out', 'w')
-                test_out = file('log/ans/test.ans.out', 'w')
                 run_test(runconfig, model, train, batch_size, logger, train_out)
-                run_test(runconfig, model, test, batch_size, logger, test_out)
                 train_out.close()
-                test_out.close()
+                print >> sys.stderr, 'Try to saving model.'
                 torch.save(model.state_dict(), opt.save)
+                print >> sys.stderr, 'Save ok.'
 
     train_out = file('log/ans/train.ans.out', 'w')
     test_out = file('log/ans/test.ans.out', 'w')
