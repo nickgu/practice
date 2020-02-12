@@ -106,6 +106,7 @@ class RunConfigSeqBinary:
 
 def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None):
     # test code.
+    model.eval()
     with torch.no_grad():
         count = 0
         exact_match = 0
@@ -195,7 +196,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 one_side_match*100. / count,
                 loss/step)
 
-        print >> sys.stderr, info
+        print >> sys.stderr, pydev.ColorString.yellow(info)
         if logger:
             print >> logger, info
 
@@ -237,11 +238,12 @@ if __name__=='__main__':
     arg.str_opt('epoch', 'e', default='200')
     arg.str_opt('batch', 'b', default='64')
     arg.str_opt('test_epoch', 't', default='5')
+    arg.bool_opt('test_mode', 'T')
     arg.str_opt('logname', 'L', default='<auto>')
+    arg.str_opt('comment', 'm', default='')
     arg.str_opt('save', 's', default='params/temp_model.pkl')
     arg.bool_opt('shuffle', 'S')
     arg.bool_opt('continue_training', 'c')
-    arg.bool_opt('test_mode', 'T')
     opt = arg.init_arg()
     fix_model()
 
@@ -279,12 +281,11 @@ if __name__=='__main__':
     #model = V2_MatchAttention(input_emb_size).cuda()
     #model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
-    model = V3_MatchAttention_OutputAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V3_MatchAttention_OutputAdjust(pretrain_weights=vocab.get_pretrained(), hidden_size=300).cuda()
 
     # on testing
-    #model = V4_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
+    model = V4_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V4_MatchAttention_PadLSTM(pretrain_weights=vocab.get_pretrained()).cuda()
-    #model = V3_BilinearAttention(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_CharCNN_MatAtt(pretrain_weights=vocab.get_pretrained()).cuda()
 
@@ -300,10 +301,13 @@ if __name__=='__main__':
 
     if opt.logname == '<auto>':
         ts = time.strftime('%Y%m%d_%H:%M:%S',time.localtime(time.time()))
+        tag = ''
+        if opt.comment:
+            tag = '_' + opt.comment
         test_tag = ''
         if opt.test_mode:
             test_tag = 'TEST_'
-        logname = 'log/all/%s%s_%s_log'% (test_tag, model_name, ts)
+        logname = 'log/all/%s%s_%s%s.log'% (test_tag, model_name, ts, tag)
     else:
         logname = opt.logname
     logger = file(logname, 'w')
@@ -317,6 +321,7 @@ if __name__=='__main__':
     # for triple.
     # criterion init in runconfig.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
+    #optimizer = torch.optim.Adadelta(model.parameters(), lr=0.5)
 
     # === Init Data ===
     data_path = '../dataset/squad1/'
@@ -354,6 +359,8 @@ if __name__=='__main__':
         step = 0
         bar = tqdm.tqdm(range(0, len(train.qtoks), batch_size))
         for s in bar:
+            # training mode.
+            model.train()
             optimizer.zero_grad()
 
             batch_qt = train.qtoks[s:s+batch_size]

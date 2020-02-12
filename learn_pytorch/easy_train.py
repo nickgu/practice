@@ -126,6 +126,9 @@ def easy_train(forward_and_backward_fn, optimizer, iteration_count, loss_curve_o
     process_bar = tqdm.tqdm(range(int(iteration_count)))
     acc_loss = 1.0
     try:
+        # TODO
+        # model.train()
+
         for iter_num in process_bar:
             optimizer.zero_grad()
             cur_loss = forward_and_backward_fn()
@@ -155,6 +158,9 @@ def easy_test(model, x, y):
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
     with torch.no_grad():
+        # TODO
+        # model.eval()
+
         y_ = model.forward(x).max(1)[1]
         #   check the precision
         hit = y.eq(y_).sum()
@@ -173,6 +179,9 @@ def epoch_test(dataloader, model, device=None, precision_threshold=None, current
     #   max(1) : max dim at dim-1
     #   [1] : get dim.
     with torch.no_grad():
+        # TODO
+        # model.eval()
+
         total = 0
         hit = 0
         for x, y in dataloader:
@@ -205,6 +214,8 @@ def epoch_train(train, model, optimizer,
         T = torchvision.transforms.ToPILImage()
         '''
         best = 0
+        # TODO
+        # model.train()
         for e in range(epoch):
             print 'Epoch %d:' % e
             # DropLast??
@@ -281,6 +292,9 @@ def interactive_sgd_train(train, model,
 
     for e in range(epoch):
         try:
+            # TODO
+            # model.train()
+
             print 'Epoch %d:' % e
             print 'Learning Rate:', sgd.state_dict()['param_groups'][0]['lr']
             bar = tqdm.tqdm(train)
