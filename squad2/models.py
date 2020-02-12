@@ -34,7 +34,7 @@ class V4_BiDafAdjust(torch.nn.Module):
                 batch_first=True, 
                 bidirectional=True)
 
-        self.__g_width = self.__hidden_size * 2 * 3
+        self.__g_width = self.__hidden_size * 2 * 4
 
         # input: g
         self.__rnn_start = torch.nn.LSTM(
@@ -107,11 +107,13 @@ class V4_BiDafAdjust(torch.nn.Module):
     
         # cross q/c
         cq = self.cross_feature(c_out, q_out)
-        #cq = self.cross_feature(c_out, q_out)
+        #qc = self.qc_feature(c_out, q_out)
+        cc = self.cross_feature(c_out, c_out)
         had_cq = c_out * cq
+        #had_qc = c_out * qc
 
         # cat.
-        g = torch.cat((c_out, cq, had_cq), dim=2) # batch, clen, self.__g_width
+        g = torch.cat((c_out, cq, had_cq, cc), dim=2) # batch, clen, self.__g_width
 
         # upper rnn.
         x_start, _ = self.__rnn_start(g)

@@ -282,6 +282,7 @@ if __name__=='__main__':
     #model = V2_MatchAttention_EmbTrainable(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_MatchAttention_OutputAdjust(pretrain_weights=vocab.get_pretrained(), hidden_size=300).cuda()
+    #model = V4_MatchAttention_Dropout(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # on testing
     model = V4_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
