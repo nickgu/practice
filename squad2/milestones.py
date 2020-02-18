@@ -15,7 +15,7 @@ class V4_MatchAttention_Dropout(torch.nn.Module):
     def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, 
             hidden_size=128, layer_num=2, out_layer_num=2, dropout=0.2):
 
-        super(V4_BiDafAdjust, self).__init__()
+        super(V4_MatchAttention_Dropout, self).__init__()
         self.__hidden_size = hidden_size
 
         if pretrain_weights is None:

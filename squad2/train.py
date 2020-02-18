@@ -285,7 +285,7 @@ if __name__=='__main__':
     #model = V4_MatchAttention_Dropout(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # on testing
-    model = V4_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
+    model = V5_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V4_MatchAttention_PadLSTM(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_CharCNN_MatAtt(pretrain_weights=vocab.get_pretrained()).cuda()
