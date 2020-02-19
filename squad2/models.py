@@ -9,7 +9,7 @@ import torch.nn.utils.rnn as rnn_utils
 
 class V5_BiDafAdjust(torch.nn.Module):
     '''
-        63.77%
+        63.9%
     '''
     def __init__(self, vocab_size=None, emb_size=None, pretrain_weights=None, 
             hidden_size=128, layer_num=2, out_layer_num=2, dropout=0.2):
@@ -31,7 +31,7 @@ class V5_BiDafAdjust(torch.nn.Module):
                 batch_first=True, 
                 bidirectional=True)
 
-        self.__g_width = self.__hidden_size * 2 * 4
+        self.__g_width = self.__hidden_size * 2 * 6
         self.__m_width = self.__hidden_size * 2
 
         # input: g
@@ -91,12 +91,24 @@ class V5_BiDafAdjust(torch.nn.Module):
 
         return cq_emb, qc_emb
 
+    def cross_feature(self, c_emb, q_emb):
+        # q_emb: (batch, qlen, emb)
+        # c_emb: (batch, clen, emb)
+        # output: (batch, clen, emb)
+        q_ = q_emb.permute(0, 2, 1) # batch, emb, qlen
+        c_att_on_q = c_emb.bmm(q_).softmax(dim=2) # batch, clen, qlen
+        cq_emb = torch.bmm(c_att_on_q, q_emb)
+        return cq_emb
+
     def cq_attention(self, q_out, c_out):
         cq, qc = self.bidaf_cross(c_out, q_out)
         had_cq = c_out * cq
         had_qc = c_out * qc
 
-        g = torch.cat((c_out, cq, had_cq, had_qc), dim=2) # batch, clen, self.__g_width
+        cc = self.cross_feature(c_out, c_out)
+        ccq = self.cross_feature(c_out, cq)
+
+        g = torch.cat((c_out, cq, had_cq, had_qc, cc, ccq), dim=2) # batch, clen, self.__g_width
         g, _ = self.__rnn_cq(g)
         return g
 
