@@ -283,9 +283,10 @@ if __name__=='__main__':
     #model = V2_MatchAttention_Binary(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_MatchAttention_OutputAdjust(pretrain_weights=vocab.get_pretrained(), hidden_size=300).cuda()
     #model = V4_MatchAttention_Dropout(pretrain_weights=vocab.get_pretrained()).cuda()
+    #model = V5_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
 
     # on testing
-    model = V5_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
+    model = V6_RNet(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V4_MatchAttention_PadLSTM(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_DropoutMatchAttention(pretrain_weights=vocab.get_pretrained()).cuda()
     #model = V3_CharCNN_MatAtt(pretrain_weights=vocab.get_pretrained()).cuda()
