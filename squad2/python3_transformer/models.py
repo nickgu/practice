@@ -6,6 +6,26 @@
 import torch
 import sys
 import torch.nn.utils.rnn as rnn_utils
+from transformers import *
+
+class V6_Bert(torch.nn.Module):
+    '''
+        import tokens
+    '''
+    def __init__(self):
+        super(V6_Bert, self).__init__()
+
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.linear_start = torch.nn.Linear(768, 1)
+        self.linear_end = torch.nn.Linear(768, 1)
+
+
+    def forward(self, merge_tok_ids):
+        ret = self.bert(merge_tok_ids)
+        out_start = self.linear_start(ret[0])
+        out_end = self.linear_start(ret[0])
+
+        return torch.cat( (out_start, out_end), dim=1 )
 
 class V5_BiDafAdjust(torch.nn.Module):
     '''
