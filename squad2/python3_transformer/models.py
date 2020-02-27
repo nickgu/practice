@@ -20,8 +20,8 @@ class V6_Bert(torch.nn.Module):
         self.linear_end = torch.nn.Linear(768, 1)
 
 
-    def forward(self, merge_tok_ids):
-        tok_emb, all_emb = self.bert(merge_tok_ids)
+    def forward(self, merge_tok_ids, token_type_ids):
+        tok_emb, all_emb = self.bert(merge_tok_ids, token_type_ids=token_type_ids)
         out_start = self.linear_start(tok_emb)
         out_end = self.linear_start(tok_emb)
         return torch.cat( (out_start.permute(0,2,1), out_end.permute(0,2,1)), dim=1 )

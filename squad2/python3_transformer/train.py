@@ -88,6 +88,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
 
             batch_x = []
+            batch_token_type_ids = []
             batch_y = []
             batch_offset = []
 
@@ -100,21 +101,27 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     cut_len = 512-3-len(q_toks)-1
                     p_toks = p_toks[:cut_len]
 
-                x = torch.tensor(tokenizer.encode(q_toks, p_toks))
-                offset = 2+len(q_toks)
+                x_ids = tokenizer.encode(q_toks, p_toks)
+
+                x = torch.tensor(x_ids)
+                offset = x_ids.index(102)
                 y = torch.LongTensor(y) + offset
+                token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
 
                 if y[1]>=512:
                     # ignore out of range data.
                     continue
+
                 batch_x.append(x)
                 batch_y.append(y)
+                batch_token_type_ids.append(torch.tensor(token_type_ids))
                 batch_offset.append(offset)
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
+            batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
 
-            y_ = model(batch_x)
+            y_ = model(batch_x, token_type_ids=batch_token_type_ids)
             l = runconfig.loss(y_, batch_y)
             step += 1
             loss += l.item()
@@ -122,7 +129,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
             # seems conflict?
             y_ = y_.softmax(dim=-1)
             ans = runconfig.get_ans_range(y_)
-            for idx, ((a,b), (c,d), offset) in enumerate(zip(ans, batch_y, offset)):
+            for idx, ((a,b), (c,d), offset) in enumerate(zip(ans, batch_y, batch_offset)):
                 # test one side.
                 count += 1
 
@@ -223,7 +230,7 @@ if __name__=='__main__':
     load_size = (None, None)
     if opt.test_mode:
         py3dev.info('Running in TEST-MODE')
-        load_size = (5000, 1000)
+        load_size = (1000, 500)
 
     py3dev.info('epoch=%d' % epoch_count)
     py3dev.info('test_epoch=%d' % test_epoch)
@@ -267,7 +274,7 @@ if __name__=='__main__':
         py3dev.info('load over.')
 
     # criterion init in runconfig.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
     #optimizer = torch.optim.Adadelta(model.parameters(), lr=0.5)
 
     # === Init Data ===
@@ -302,33 +309,40 @@ if __name__=='__main__':
             optimizer.zero_grad()
 
             batch_x = []
+            batch_token_type_ids = []
             batch_y = []
 
             batch_qt = train.qtoks[s:s+batch_size]
             batch_ct = train.ctoks[s:s+batch_size]
             batch_output = train.answer_range[s:s+batch_size]
             
-            for q_toks, p_toks, y in zip(batch_qt, batch_ct, batch_output):
+            for idx, (q_toks, p_toks, y) in enumerate(zip(batch_qt, batch_ct, batch_output)):
                 if len(q_toks) + len(p_toks) >= 512 - 3:
                     cut_len = 512-3-len(q_toks)-1
                     p_toks = p_toks[:cut_len]
 
-                x = torch.tensor(tokenizer.encode(q_toks, p_toks))
-                offset = 2+len(q_toks)
+                x_ids = tokenizer.encode(q_toks, p_toks)
+
+                x = torch.tensor(x_ids)
+                offset = x_ids.index(102)
                 y = torch.LongTensor(y) + offset
+                token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
 
                 if y[1]>=512:
                     # ignore out of range data.
                     continue
+
                 batch_x.append(x)
                 batch_y.append(y)
+                batch_token_type_ids.append(torch.tensor(token_type_ids))
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
+            batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
-            y_ = model(batch_x)
+            y_ = model(batch_x, token_type_ids=batch_token_type_ids)
             l = runconfig.loss(y_, batch_y)
 
             step += 1
