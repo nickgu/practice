@@ -21,11 +21,10 @@ class V6_Bert(torch.nn.Module):
 
 
     def forward(self, merge_tok_ids):
-        ret = self.bert(merge_tok_ids)
-        out_start = self.linear_start(ret[0])
-        out_end = self.linear_start(ret[0])
-
-        return torch.cat( (out_start, out_end), dim=1 )
+        tok_emb, all_emb = self.bert(merge_tok_ids)
+        out_start = self.linear_start(tok_emb)
+        out_end = self.linear_start(tok_emb)
+        return torch.cat( (out_start.permute(0,2,1), out_end.permute(0,2,1)), dim=1 )
 
 class V5_BiDafAdjust(torch.nn.Module):
     '''

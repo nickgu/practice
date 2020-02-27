@@ -8,33 +8,18 @@ import json
 import unicodedata
 import string
 import torch
+import py3dev
 import nlp_utils
-
-def errlog(s):
-    print(s, file=sys.stderr)
 
 class SquadData:
     def __init__(self, data_name='SQuAD data'):
         self.data_name = data_name
         self.qtoks = []
         self.ctoks = []
-        self.qchar = []
-        self.cchar = []
         self.triple_output = []
         self.binary_output = []
         self.answer_range = []
         self.answer_candidates = []
-
-    def shuffle(self):
-        import random
-        if len(self.qchar)==0:
-            shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates)
-            random.shuffle(shuf)
-            self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates = zip(*shuf)
-        else:
-            shuf = zip(self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates, self.qchar, self.cchar)
-            random.shuffle(shuf)
-            self.qtoks, self.ctoks, self.triple_output, self.binary_output, self.answer_range, self.answer_candidates, self.qchar, self.cchar = zip(*shuf)
 
 class SquadReader():
     def __init__(self, filename):
@@ -75,13 +60,7 @@ class SquadReader():
                     yield qid, question, ans, is_impossible
 
 
-def padtoken(token):
-    L=16
-    token = (token + u'\0'*L)[:L]
-    ret = map(lambda c:min(69999, ord(c)), token)
-    return ret
-
-def load_data(reader, tokenizer, data_name=None, limit_count=None, read_char=False):
+def load_data(reader, tokenizer, data_name=None, limit_count=None):
     squad_data = SquadData(data_name)
 
     for title, context, qid, question, ans, is_impossible in reader.iter_instance():
@@ -118,25 +97,18 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None, read_char=Fal
             context_tokens += tokenizer(c)
         else:
             context_tokens = tokenizer(context)
-            errlog('Mismatch on answer finding..')
+            py3dev.error('Mismatch on answer finding..')
 
-        context_tokens.append('<end>') # add a extra token.
         question_tokens = tokenizer(question)
 
         qt = []
         ct = []
-        qchar = []
-        cchar = []
         c_out = []
         b_out = []
         for tok in question_tokens:
             qt.append(tok)
-            if read_char:
-                qchar.append(padtoken(tok))
         for idx, tok in enumerate(context_tokens):
             ct.append(tok)
-            if read_char:
-                cchar.append(padtoken(tok))
             if idx == answer_token_begin:
                 c_out.append(1)
                 b_out.append((1,0))
@@ -149,9 +121,7 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None, read_char=Fal
 
         squad_data.qtoks.append(qt)
         squad_data.ctoks.append(ct)
-        if read_char:
-            squad_data.qchar.append(torch.tensor(qchar))
-            squad_data.cchar.append(torch.tensor(cchar))
+
         squad_data.triple_output.append(torch.tensor(c_out))
         squad_data.binary_output.append(torch.tensor(b_out))
         squad_data.answer_range.append( (answer_token_begin, answer_token_end) )
