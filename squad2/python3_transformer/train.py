@@ -54,6 +54,7 @@ def dp_to_generate_answer_range(data):
 def model_params_size(model):
     return sum(x.numel() for x in model.parameters())
 
+
 class RunConfigRange:
     def __init__(self):
         self.__criterion = torch.nn.CrossEntropyLoss()
