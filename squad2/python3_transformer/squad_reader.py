@@ -11,6 +11,8 @@ import torch
 import py3dev
 import nlp_utils
 
+from transformers import *
+
 class SquadData:
     def __init__(self, data_name='SQuAD data'):
         self.data_name = data_name
@@ -134,5 +136,115 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
 
     return squad_data
 
+def check_answer(answer_fn, squad_fn, output_fn):
+    import sys
+    import tqdm
 
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    answer_fd = open(answer_fn)
+    answers = {}
+    for row in py3dev.foreach_row(open(answer_fn)):
+        if len(row)!=7:
+            break
+        pred, tgt, tag, pratio, py_, py, ori_index = row
+        pratio = float(pratio)
+        py_ = float(py_)
+        py = float(py)
+        ps, pe = map(lambda x:int(x), pred.split(','))
+        ts, te = map(lambda x:int(x), tgt.split(','))
+        answers[int(ori_index)] = ((ps, pe), (ts, te), tag, pratio, py_, py)
+    print('answer loaded.', file=sys.stderr)
+
+    reader = SquadReader(squad_fn)
+    output = open(output_fn, 'w')
+    idx = -1
+    count = 0
+    n_EM = 0
+    n_SM = 0
+    n_SM_B = 0
+    n_SM_E = 0
+    print('answers=%d' % len(answers))
+    bar = tqdm.tqdm(reader.iter_instance())
+    for title, context, qid, question, ans, is_impossible in bar:
+        idx += 1
+        if is_impossible:
+            continue
+        if idx not in answers:
+            continue
+        
+        qtoks = tokenizer.tokenize(question)
+        offset = len(qtoks) + 2
+        ctoks = tokenizer.tokenize(context)
+        ans_y_, ans_y, tag, p_ratio, p_y_, p_y = answers[idx]
+
+        ans_y_ = list(map(lambda x:x-offset, ans_y_))
+        ans_y = list(map(lambda x:x-offset, ans_y))
+
+        print('\n## ID=%d ##\n%s' % (idx, '='*100), file=output)
+        print('== Context ==', file=output)
+        print(context, file=output)
+        print('== Context Tokens ==', file=output)
+        print((u','.join(ctoks)), file=output)
+        print('== Question ==', file=output)
+        print(question, file=output)
+        print('== Question Tokens ==', file=output)
+        print((u','.join(qtoks)), file=output)
+        print('== Expected answer ==', file=output)
+        correct_answer = tokenizer.convert_tokens_to_string(ctoks[ans_y[0]:ans_y[1]])
+        print('rec: ' + correct_answer, file=output)
+        print('(%d, %d)' % (ans_y[0], ans_y[1]), file=output)
+        for a in ans:
+            print('%s (%d)' % (a['text'], a['answer_start']), file=output)
+        print('== Predict output ==', file=output)
+
+        ori_answer = tokenizer.convert_tokens_to_string(ctoks[ans_y_[0]:ans_y_[1]])
+        print(ori_answer, file=output)
+        print('(%d, %d)' % (ans_y_[0], ans_y_[1]), file=output)
+
+        # match candidate or both side match.
+        em = False
+        if ans_y_ == ans_y:
+            em = True
+
+        adjust_answer = ori_answer.replace(' ', '')
+        for a in ans:
+            aa = a['text'].lower().replace(u' ', u'')
+            if aa == adjust_answer:
+                em = True
+                break
+
+        if em:
+            print(' ## ExactMatch!', file=output)
+            n_EM += 1
+        elif ans_y_[0] == ans_y[0] or ans_y_[1]==ans_y[1]:
+            print((' ## SideMatch! [%s]' % tag), file=output)
+            n_SM += 1
+            if tag == 'SM_B': n_SM_B += 1
+            if tag == 'SM_E': n_SM_E += 1
+        else:
+            print(' ## Wrong!', file=output)
+        print('p_ratio=%.3f, p_y_=%.5f, p_y=%.5f' % (p_ratio, p_y_, p_y), file=output)
+
+        count += 1
+        bar.set_description('EM=%.1f%%(%d), SM=%.1f%%, B=%.1f%%, E=%.1f%%, N=%d' % (
+            n_EM * 100. / count, n_EM,
+            n_SM * 100. / count,
+            n_SM_B * 100. / count, n_SM_E * 100. / count,
+            count
+            ))
+
+def check_ans_train():
+    check_answer('log/ans/train.ans.out', 
+            '../../../practice/dataset/squad1/train-v1.1.json', 
+            'log/ans/check_ans.train.out')
+
+def check_ans_test():
+    check_answer('log/ans/test.ans.out', 
+            '../../../practice/dataset/squad1/dev-v1.1.json', 
+            'log/ans/check_ans.test.out')
+
+if __name__=='__main__':
+    import fire
+    fire.Fire()
 

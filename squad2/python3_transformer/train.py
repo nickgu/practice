@@ -63,7 +63,7 @@ class RunConfigRange:
         #  second dim: (begin_pos, end_pos)
         batch_context_output = target.cuda()
         batch = batch_context_output.shape[0]
-        l = self.__criterion(predict.view(batch*2,-1), batch_context_output.view([-1]))
+        l = self.__criterion(predict.reshape(batch*2,-1), batch_context_output.reshape([-1]))
         return l
 
     def get_ans_range(self, y):
@@ -91,12 +91,13 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
             batch_token_type_ids = []
             batch_y = []
             batch_offset = []
+            batch_ori_index = []
 
             batch_qt = data.qtoks[s:s+batch_size]
             batch_ct = data.ctoks[s:s+batch_size]
             batch_output = data.answer_range[s:s+batch_size]
             
-            for q_toks, p_toks, y in zip(batch_qt, batch_ct, batch_output):
+            for idx, (q_toks, p_toks, y) in enumerate(zip(batch_qt, batch_ct, batch_output)):
                 if len(q_toks) + len(p_toks) >= 512 - 3:
                     cut_len = 512-3-len(q_toks)-1
                     p_toks = p_toks[:cut_len]
@@ -104,18 +105,23 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 x_ids = tokenizer.encode(q_toks, p_toks)
 
                 x = torch.tensor(x_ids)
-                offset = x_ids.index(102)
+                offset = x_ids.index(102) + 1
                 y = torch.LongTensor(y) + offset
                 token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
 
+                # no need to ignore in testing.
                 if y[1]>=512:
                     # ignore out of range data.
                     continue
 
                 batch_x.append(x)
                 batch_y.append(y)
-                batch_token_type_ids.append(torch.tensor(token_type_ids))
                 batch_offset.append(offset)
+                batch_ori_index.append(s+idx)
+                batch_token_type_ids.append(torch.tensor(token_type_ids))
+
+            if len(batch_x)==0:
+                continue
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
@@ -129,7 +135,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
             # seems conflict?
             y_ = y_.softmax(dim=-1)
             ans = runconfig.get_ans_range(y_)
-            for idx, ((a,b), (c,d), offset) in enumerate(zip(ans, batch_y, batch_offset)):
+            for idx, ((a,b), (c,d), offset, ori_index) in enumerate(zip(ans, batch_y, batch_offset, batch_ori_index)):
                 # test one side.
                 count += 1
 
@@ -139,9 +145,10 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     em = True
                 else:
                     # if answer == answer_candidate, also Exact Match.
-                    trim_ans = u''.join(data.ctoks[s+idx][a-offset:b-offset]).replace(u' ', '')
-                    for ans_cand in data.answer_candidates[s+idx]:
-                        adjust_ans = ans_cand.replace(u' ', '')
+                    ans = tokenizer.convert_tokens_to_string(data.ctoks[ori_index][a-offset:b-offset])
+                    trim_ans = ans.replace(u' ', '')
+                    for ans_cand in data.answer_candidates[ori_index]:
+                        adjust_ans = ans_cand.lower().replace(u' ', '')
                         if adjust_ans == trim_ans:
                             em = True
                 if em:
@@ -163,8 +170,8 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     p_y_ = (runconfig.p(y_,idx,0,a)*runconfig.p(y_,idx,1,b)).item()
                     p_y = (runconfig.p(y_,idx,0,c)*runconfig.p(y_,idx,1,d)).item()
                     p_ratio = p_y / p_y_
-                    print('%d,%d\t%d,%d\t%s\t%.3f\t%f\t%f' % (
-                            a,b,c,d, tag, p_ratio, p_y_, p_y), file=answer_output)
+                    print('%d,%d\t%d,%d\t%s\t%.3f\t%f\t%f\t%d' % (
+                            a,b,c,d, tag, p_ratio, p_y_, p_y, ori_index), file=answer_output)
 
         info = '#(%s) EM=%.2f%% (%d/%d), SM=%.2f%%, OSM=%.2f%% Loss=%.5f' % (
                 data.data_name,
@@ -324,7 +331,7 @@ if __name__=='__main__':
                 x_ids = tokenizer.encode(q_toks, p_toks)
 
                 x = torch.tensor(x_ids)
-                offset = x_ids.index(102)
+                offset = x_ids.index(102) + 1
                 y = torch.LongTensor(y) + offset
                 token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
 
@@ -335,6 +342,9 @@ if __name__=='__main__':
                 batch_x.append(x)
                 batch_y.append(y)
                 batch_token_type_ids.append(torch.tensor(token_type_ids))
+
+            if len(batch_x)==0:
+                continue
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()

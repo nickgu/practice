@@ -16,15 +16,12 @@ class V6_Bert(torch.nn.Module):
         super(V6_Bert, self).__init__()
 
         self.bert = BertModel.from_pretrained('bert-base-uncased')
-        self.linear_start = torch.nn.Linear(768, 1)
-        self.linear_end = torch.nn.Linear(768, 1)
-
+        self.linear = torch.nn.Linear(768, 2)
 
     def forward(self, merge_tok_ids, token_type_ids):
         tok_emb, all_emb = self.bert(merge_tok_ids, token_type_ids=token_type_ids)
-        out_start = self.linear_start(tok_emb)
-        out_end = self.linear_start(tok_emb)
-        return torch.cat( (out_start.permute(0,2,1), out_end.permute(0,2,1)), dim=1 )
+        out = self.linear(tok_emb)
+        return out.permute(0,2,1)
 
 class V5_BiDafAdjust(torch.nn.Module):
     '''
