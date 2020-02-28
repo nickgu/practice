@@ -358,8 +358,7 @@ if __name__=='__main__':
             batch_mask = rnn_utils.pad_sequence(batch_mask, batch_first=True).detach().cuda()
             batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
 
-            # triple output: (batch, clen, 3)
-            # binary output: (batch, clen, 2, 2)
+            # output: (batch, 2, clen)
             y_ = model(batch_x, token_type_ids=batch_token_type_ids, attention_mask=batch_mask)
             l = runconfig.loss(y_, batch_y)
 
