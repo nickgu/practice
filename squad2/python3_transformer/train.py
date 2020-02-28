@@ -89,8 +89,10 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
 
             batch_x = []
-            batch_token_type_ids = []
             batch_y = []
+            batch_mask = []
+            batch_token_type_ids = []
+
             batch_offset = []
             batch_ori_index = []
 
@@ -108,7 +110,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 x = torch.tensor(x_ids)
                 offset = x_ids.index(102) + 1
                 y = torch.LongTensor(y) + offset
-                token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
+                token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
 
                 # no need to ignore in testing.
                 if y[1]>=512:
@@ -120,15 +122,17 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                 batch_offset.append(offset)
                 batch_ori_index.append(s+idx)
                 batch_token_type_ids.append(torch.tensor(token_type_ids))
+                batch_mask.append(torch.ones(len(x_ids), dtype=torch.long))
 
             if len(batch_x)==0:
                 continue
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
+            batch_mask = rnn_utils.pad_sequence(batch_mask, batch_first=True).detach().cuda()
             batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
 
-            y_ = model(batch_x, token_type_ids=batch_token_type_ids)
+            y_ = model(batch_x, token_type_ids=batch_token_type_ids, attention_mask=batch_mask)
             l = runconfig.loss(y_, batch_y)
             step += 1
             loss += l.item()
@@ -317,8 +321,9 @@ if __name__=='__main__':
             optimizer.zero_grad()
 
             batch_x = []
-            batch_token_type_ids = []
             batch_y = []
+            batch_token_type_ids = []
+            batch_mask = []
 
             batch_qt = train.qtoks[s:s+batch_size]
             batch_ct = train.ctoks[s:s+batch_size]
@@ -334,7 +339,7 @@ if __name__=='__main__':
                 x = torch.tensor(x_ids)
                 offset = x_ids.index(102) + 1
                 y = torch.LongTensor(y) + offset
-                token_type_ids = [0 if i <= offset else 1 for i in range(len(x_ids))] 
+                token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
 
                 if y[1]>=512:
                     # ignore out of range data.
@@ -343,17 +348,19 @@ if __name__=='__main__':
                 batch_x.append(x)
                 batch_y.append(y)
                 batch_token_type_ids.append(torch.tensor(token_type_ids))
+                batch_mask.append(torch.ones(len(x_ids), dtype=torch.long))
 
             if len(batch_x)==0:
                 continue
 
             batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
             batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
+            batch_mask = rnn_utils.pad_sequence(batch_mask, batch_first=True).detach().cuda()
             batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
 
             # triple output: (batch, clen, 3)
             # binary output: (batch, clen, 2, 2)
-            y_ = model(batch_x, token_type_ids=batch_token_type_ids)
+            y_ = model(batch_x, token_type_ids=batch_token_type_ids, attention_mask=batch_mask)
             l = runconfig.loss(y_, batch_y)
 
             step += 1

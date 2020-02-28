@@ -18,8 +18,11 @@ class V6_Bert(torch.nn.Module):
         self.bert = BertModel.from_pretrained('bert-base-uncased')
         self.linear = torch.nn.Linear(768, 2)
 
-    def forward(self, merge_tok_ids, token_type_ids):
-        tok_emb, all_emb = self.bert(merge_tok_ids, token_type_ids=token_type_ids)
+    def forward(self, merge_tok_ids, token_type_ids, attention_mask):
+        tok_emb, all_emb = self.bert(merge_tok_ids, 
+                token_type_ids=token_type_ids,
+                attention_mask=attention_mask)
+
         out = self.linear(tok_emb)
         return out.permute(0,2,1)
 
