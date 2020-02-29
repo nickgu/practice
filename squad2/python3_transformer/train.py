@@ -4,7 +4,7 @@
 # 
 
 import time
-import squad_reader
+from bert_squad_reader import SquadReader, BertSquadData, bert_load_data
 import torch
 import torchtext 
 import torch.nn.utils.rnn as rnn_utils
@@ -87,52 +87,21 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
         step = 0
 
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
-
-            batch_x = []
-            batch_y = []
-            batch_mask = []
-            batch_token_type_ids = []
-
-            batch_offset = []
-            batch_ori_index = []
+            batch_offset = data.context_offset[s:s+batch_size]
+            batch_ori_index = data.ori_index[s:s+batch_size]
+            batch_cand = data.answer_candidates[s:s+batch_size]
 
             batch_qt = data.qtoks[s:s+batch_size]
             batch_ct = data.ctoks[s:s+batch_size]
             batch_output = data.answer_range[s:s+batch_size]
-            
-            for idx, (q_toks, p_toks, y) in enumerate(zip(batch_qt, batch_ct, batch_output)):
-                if len(q_toks) + len(p_toks) >= 512 - 3:
-                    cut_len = 512-3-len(q_toks)-1
-                    p_toks = p_toks[:cut_len]
 
-                x_ids = tokenizer.encode(q_toks, p_toks)
+            batch_x = rnn_utils.pad_sequence(data.x[s:s+batch_size], batch_first=True).cuda()
+            batch_y = rnn_utils.pad_sequence(data.y[s:s+batch_size], batch_first=True).cuda()
+            batch_token_types = rnn_utils.pad_sequence(data.x_token_types[s:s+batch_size], batch_first=True).cuda()
+            batch_mask = rnn_utils.pad_sequence(data.x_mask[s:s+batch_size], batch_first=True).cuda()
 
-                x = torch.tensor(x_ids)
-                offset = x_ids.index(102) + 1
-                y = torch.LongTensor(y) + offset
-                token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
-
-                # no need to ignore in testing.
-                if y[1]>=512:
-                    # ignore out of range data.
-                    continue
-
-                batch_x.append(x)
-                batch_y.append(y)
-                batch_offset.append(offset)
-                batch_ori_index.append(s+idx)
-                batch_token_type_ids.append(torch.tensor(token_type_ids))
-                batch_mask.append(torch.ones(len(x_ids), dtype=torch.long))
-
-            if len(batch_x)==0:
-                continue
-
-            batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
-            batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
-            batch_mask = rnn_utils.pad_sequence(batch_mask, batch_first=True).detach().cuda()
-            batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
-
-            y_ = model(batch_x, token_type_ids=batch_token_type_ids, attention_mask=batch_mask)
+            # output: (batch, 2, clen)
+            y_ = model(batch_x, token_type_ids=batch_token_types, attention_mask=batch_mask)
             l = runconfig.loss(y_, batch_y)
             step += 1
             loss += l.item()
@@ -150,9 +119,9 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     em = True
                 else:
                     # if answer == answer_candidate, also Exact Match.
-                    ans = tokenizer.convert_tokens_to_string(data.ctoks[ori_index][a-offset:b-offset])
+                    ans = tokenizer.convert_tokens_to_string(batch_ct[idx][a-offset:b-offset])
                     trim_ans = ans.replace(u' ', '')
-                    for ans_cand in data.answer_candidates[ori_index]:
+                    for ans_cand in batch_cand[idx]:
                         adjust_ans = ans_cand.lower().replace(u' ', '')
                         if adjust_ans == trim_ans:
                             em = True
@@ -224,6 +193,7 @@ def fix_model():
     
 if __name__=='__main__':
     arg = py3dev.Arg('SQuAD data training program with pytorch.')
+    arg.str_opt('model', 'M', default='bert-base-uncased')
     arg.str_opt('epoch', 'e', default='200')
     arg.str_opt('batch', 'b', default='64')
     arg.str_opt('test_epoch', 't', default='5')
@@ -257,8 +227,9 @@ if __name__=='__main__':
     runconfig.input_acture_len = False
 
     # milestones model.
+    py3dev.info('Preparing models..')
     #model = V5_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
-    model = V6_Bert().cuda()
+    model = V6_Bert(opt.model).cuda()
 
     # on testing
 
@@ -299,14 +270,12 @@ if __name__=='__main__':
 
     #tokenizer = nlp_utils.init_tokenizer()
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    #tokenizer wrapper.
-    tw = tokenizer.tokenize
 
-    train_reader = squad_reader.SquadReader(train_filename)
-    test_reader = squad_reader.SquadReader(test_filename)
+    train_reader = SquadReader(train_filename)
+    test_reader = SquadReader(test_filename)
 
-    train = squad_reader.load_data(train_reader, tw, data_name='Train', limit_count=load_size[0])
-    test = squad_reader.load_data(test_reader, tw, data_name='Test', limit_count=load_size[1])
+    train = bert_load_data(train_reader, tokenizer, data_name='Train', limit_count=load_size[0])
+    test = bert_load_data(test_reader, tokenizer, data_name='Test', limit_count=load_size[1])
     py3dev.info('Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks)))
 
     # training phase.
@@ -320,46 +289,13 @@ if __name__=='__main__':
             model.train()
             optimizer.zero_grad()
 
-            batch_x = []
-            batch_y = []
-            batch_token_type_ids = []
-            batch_mask = []
-
-            batch_qt = train.qtoks[s:s+batch_size]
-            batch_ct = train.ctoks[s:s+batch_size]
-            batch_output = train.answer_range[s:s+batch_size]
-            
-            for idx, (q_toks, p_toks, y) in enumerate(zip(batch_qt, batch_ct, batch_output)):
-                if len(q_toks) + len(p_toks) >= 512 - 3:
-                    cut_len = 512-3-len(q_toks)-1
-                    p_toks = p_toks[:cut_len]
-
-                x_ids = tokenizer.encode(q_toks, p_toks)
-
-                x = torch.tensor(x_ids)
-                offset = x_ids.index(102) + 1
-                y = torch.LongTensor(y) + offset
-                token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
-
-                if y[1]>=512:
-                    # ignore out of range data.
-                    continue
-
-                batch_x.append(x)
-                batch_y.append(y)
-                batch_token_type_ids.append(torch.tensor(token_type_ids))
-                batch_mask.append(torch.ones(len(x_ids), dtype=torch.long))
-
-            if len(batch_x)==0:
-                continue
-
-            batch_x = rnn_utils.pad_sequence(batch_x, batch_first=True).detach().cuda()
-            batch_y = rnn_utils.pad_sequence(batch_y, batch_first=True).detach().cuda()
-            batch_mask = rnn_utils.pad_sequence(batch_mask, batch_first=True).detach().cuda()
-            batch_token_type_ids = rnn_utils.pad_sequence(batch_token_type_ids, batch_first=True).detach().cuda()
+            batch_x = rnn_utils.pad_sequence(train.x[s:s+batch_size], batch_first=True).cuda()
+            batch_y = rnn_utils.pad_sequence(train.y[s:s+batch_size], batch_first=True).cuda()
+            batch_token_types = rnn_utils.pad_sequence(train.x_token_types[s:s+batch_size], batch_first=True).cuda()
+            batch_mask = rnn_utils.pad_sequence(train.x_mask[s:s+batch_size], batch_first=True).cuda()
 
             # output: (batch, 2, clen)
-            y_ = model(batch_x, token_type_ids=batch_token_type_ids, attention_mask=batch_mask)
+            y_ = model(batch_x, token_type_ids=batch_token_types, attention_mask=batch_mask)
             l = runconfig.loss(y_, batch_y)
 
             step += 1

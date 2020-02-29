@@ -13,19 +13,16 @@ import nlp_utils
 
 from transformers import *
 
-class SquadData:
-    def __init__(self, data_name='SQuAD data'):
-        self.data_name = data_name
-        self.qtoks = []
-        self.ctoks = []
-        self.triple_output = []
-        self.binary_output = []
-        self.answer_range = []
-        self.answer_candidates = []
 
 class SquadReader():
     def __init__(self, filename):
         self.__data = json.loads(open(filename).read())
+        self.__instance_count = 0
+        for item in self.__data['data']:
+            for para in item['paragraphs']:
+                self.__instance_count += len(para['qas'])
+
+    def instance_count(self): return self.__instance_count
 
     def iter_instance(self):
         '''
@@ -61,11 +58,42 @@ class SquadReader():
                     is_impossible = qa.get('is_impossible', False)
                     yield qid, question, ans, is_impossible
 
+class BertSquadData:
+    def __init__(self, data_name='SQuAD data'):
+        self.data_name = data_name
+        self.qtoks = []
+        self.ctoks = []
+        
+        # [CLS], ques_tok_id, ..., [SEP], pass_tok_id, ..., [SEP]
+        self.x = []
+        # (begin, end), ...
+        self.y = []
+        # 0 if out of range else 1
+        self.x_mask = []
+        # 0 if in question, 1 in context.
+        self.x_token_types = []
 
-def load_data(reader, tokenizer, data_name=None, limit_count=None):
-    squad_data = SquadData(data_name)
+        self.context_offset = []
+        self.ori_index = []
 
-    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        self.answer_range = []
+        self.answer_candidates = []
+
+
+def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
+    import tqdm
+
+    squad_data = BertSquadData(data_name)
+
+    BERT_LENGTH = 512
+    abandon_count = 0
+    cut_count = 0
+    if limit_count:
+        prog = tqdm.tqdm(enumerate(reader.iter_instance()), total=min(limit_count, reader.instance_count()))
+    else:
+        prog = tqdm.tqdm(enumerate(reader.iter_instance()), total=reader.instance_count())
+
+    for ori_index, (title, context, qid, question, ans, is_impossible) in prog:
         ans_start = -1
         ans_text = 'none'
 
@@ -82,6 +110,7 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
         for a in ans:
             ans_cand.append(a['text'])
 
+        question_tokens = tokenizer.tokenize(question)
         context_tokens = []
         answer_token_begin = -1
         answer_token_end = -1
@@ -91,49 +120,51 @@ def load_data(reader, tokenizer, data_name=None, limit_count=None):
             b = context[ans_start : ans_start + len(ans_text)].strip()
             c = context[ans_start+len(ans_text):].strip()
 
-            context_tokens += tokenizer(a)
+            context_tokens += tokenizer.tokenize(a)
             answer_token_begin = len(context_tokens)
-            context_tokens += tokenizer(b)
-            # end is the ending position. not+1
+            context_tokens += tokenizer.tokenize(b)
             answer_token_end = len(context_tokens)
-            context_tokens += tokenizer(c)
+            context_tokens += tokenizer.tokenize(c)
         else:
-            context_tokens = tokenizer(context)
+            context_tokens = tokenizer.tokenize(context)
             py3dev.error('Mismatch on answer finding..')
 
-        question_tokens = tokenizer(question)
+        if len(question_tokens) + len(context_tokens) >= BERT_LENGTH - 3:
+            cut_len = BERT_LENGTH-3-len(question_tokens)
+            context_tokens = context_tokens[:cut_len]
+            cut_count += 1
 
-        qt = []
-        ct = []
-        c_out = []
-        b_out = []
-        for tok in question_tokens:
-            qt.append(tok)
-        for idx, tok in enumerate(context_tokens):
-            ct.append(tok)
-            if idx == answer_token_begin:
-                c_out.append(1)
-                b_out.append((1,0))
-            elif idx == answer_token_end:
-                c_out.append(2)
-                b_out.append((0,1))
-            else:
-                c_out.append(0)
-                b_out.append((0,0))
+        x_ids = tokenizer.encode(question_tokens, context_tokens)
+        total_len = len(x_ids)
+        x = torch.tensor(x_ids)
 
-        squad_data.qtoks.append(qt)
-        squad_data.ctoks.append(ct)
+        offset = x_ids.index(102) + 1
+        y = torch.LongTensor((answer_token_begin, answer_token_end)) + offset
+        token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
 
-        squad_data.triple_output.append(torch.tensor(c_out))
-        squad_data.binary_output.append(torch.tensor(b_out))
+        if y[1]>=BERT_LENGTH:
+            abandon_count += 1
+            continue
+
+        squad_data.qtoks.append(question_tokens)
+        squad_data.ctoks.append(context_tokens)
+
+        squad_data.x.append(torch.tensor(x))
+        squad_data.y.append(torch.tensor(y))
+        squad_data.x_token_types.append(torch.tensor(token_type_ids))
+        squad_data.x_mask.append(torch.ones(len(x_ids), dtype=torch.long))
+        squad_data.context_offset.append(offset)
+        squad_data.ori_index.append(ori_index)
+
         squad_data.answer_range.append( (answer_token_begin, answer_token_end) )
-        squad_data.answer_candidates.append( ans_cand )
+        squad_data.answer_candidates.append(ans_cand)
         
         if limit_count is not None:
             limit_count -= 1
             if limit_count <=0:
                 break
 
+    py3dev.info('load=%d, abandon=%d, cut=%d' % (len(squad_data.x), abandon_count, cut_count))
     return squad_data
 
 def check_answer(answer_fn, squad_fn, output_fn):
@@ -165,7 +196,7 @@ def check_answer(answer_fn, squad_fn, output_fn):
     n_SM_B = 0
     n_SM_E = 0
     print('answers=%d' % len(answers))
-    bar = tqdm.tqdm(reader.iter_instance())
+    bar = tqdm.tqdm(reader.iter_instance(), total=reader.instance_count())
     for title, context, qid, question, ans, is_impossible in bar:
         idx += 1
         if is_impossible:
@@ -236,13 +267,18 @@ def check_answer(answer_fn, squad_fn, output_fn):
 
 def check_ans_train():
     check_answer('log/ans/train.ans.out', 
-            '../../../practice/dataset/squad1/train-v1.1.json', 
+            '../../dataset/squad1/train-v1.1.json', 
             'log/ans/check_ans.train.out')
 
 def check_ans_test():
     check_answer('log/ans/test.ans.out', 
-            '../../../practice/dataset/squad1/dev-v1.1.json', 
+            '../../dataset/squad1/dev-v1.1.json', 
             'log/ans/check_ans.test.out')
+
+def test_load_data():
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    train_reader = SquadReader('../../dataset/squad1/dev-v1.1.json')
+    train = bert_load_data(train_reader, tokenizer, data_name='Train')
 
 if __name__=='__main__':
     import fire

@@ -12,10 +12,10 @@ class V6_Bert(torch.nn.Module):
     '''
         import tokens
     '''
-    def __init__(self):
+    def __init__(self, model_name='bert-base-uncased'):
         super(V6_Bert, self).__init__()
 
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.bert = BertModel.from_pretrained(model_name)
         self.linear = torch.nn.Linear(768, 2)
 
     def forward(self, merge_tok_ids, token_type_ids, attention_mask):
