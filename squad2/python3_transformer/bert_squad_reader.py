@@ -74,7 +74,7 @@ class BertSquadData:
         self.x_token_types = []
 
         self.context_offset = []
-        self.ori_index = []
+        self.qid = []
 
         self.answer_range = []
         self.answer_candidates = []
@@ -154,7 +154,7 @@ def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
         squad_data.x_token_types.append(torch.tensor(token_type_ids))
         squad_data.x_mask.append(torch.ones(len(x_ids), dtype=torch.long))
         squad_data.context_offset.append(offset)
-        squad_data.ori_index.append(ori_index)
+        squad_data.qid.append(qid)
 
         squad_data.answer_range.append( (answer_token_begin, answer_token_end) )
         squad_data.answer_candidates.append(ans_cand)

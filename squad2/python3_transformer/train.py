@@ -88,7 +88,7 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
 
         for s in tqdm.tqdm(range(0, len(data.qtoks), batch_size)):
             batch_offset = data.context_offset[s:s+batch_size]
-            batch_ori_index = data.ori_index[s:s+batch_size]
+            batch_qid = data.qid[s:s+batch_size]
             batch_cand = data.answer_candidates[s:s+batch_size]
 
             batch_qt = data.qtoks[s:s+batch_size]
@@ -109,18 +109,19 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
             # seems conflict?
             y_ = y_.softmax(dim=-1)
             ans = runconfig.get_ans_range(y_)
-            for idx, ((a,b), (c,d), offset, ori_index) in enumerate(zip(ans, batch_y, batch_offset, batch_ori_index)):
+            for idx, ((a,b), (c,d), offset, qid) in enumerate(zip(ans, batch_y, batch_offset, batch_qid)):
                 # test one side.
                 count += 1
+
+                # if answer == answer_candidate, also Exact Match.
+                ans_text = tokenizer.convert_tokens_to_string(batch_ct[idx][a-offset:b-offset])
 
                 tag = 'Wr'
                 em = False
                 if a==c and b==d:
                     em = True
                 else:
-                    # if answer == answer_candidate, also Exact Match.
-                    ans = tokenizer.convert_tokens_to_string(batch_ct[idx][a-offset:b-offset])
-                    trim_ans = ans.replace(u' ', '')
+                    trim_ans = ans_text.replace(u' ', '')
                     for ans_cand in batch_cand[idx]:
                         adjust_ans = ans_cand.lower().replace(u' ', '')
                         if adjust_ans == trim_ans:
@@ -144,8 +145,8 @@ def run_test(runconfig, model, data, batch_size, logger=None, answer_output=None
                     p_y_ = (runconfig.p(y_,idx,0,a)*runconfig.p(y_,idx,1,b)).item()
                     p_y = (runconfig.p(y_,idx,0,c)*runconfig.p(y_,idx,1,d)).item()
                     p_ratio = p_y / p_y_
-                    print('%d,%d\t%d,%d\t%s\t%.3f\t%f\t%f\t%d' % (
-                            a,b,c,d, tag, p_ratio, p_y_, p_y, ori_index), file=answer_output)
+                    print('%d,%d\t%d,%d\t%s\t%.3f\t%f\t%f\t%s\t%s' % (
+                            a,b,c,d, tag, p_ratio, p_y_, p_y, qid, ans_text), file=answer_output)
 
         info = '#(%s) EM=%.2f%% (%d/%d), SM=%.2f%%, OSM=%.2f%% Loss=%.5f' % (
                 data.data_name,
@@ -167,22 +168,6 @@ def check_coverage(toks, vocab):
         hit += len(filter(lambda x:x, [i.sum().abs()>1e-5 for i in m]))
 
     py3dev.info('Vocab coverage: %.2f%% (%d/%d)' % (hit*100./count, hit, count))
-
-class UnkEmb:
-    def __init__(self):
-        self.__dct={}
-    def get(self, tok):
-        if tok not in self.__dct:
-            emb = torch.randn(300) * 1e-3
-            self.__dct[tok] = emb
-            return emb
-        return self.__dct[tok]
-
-def preheat(vocab, *args):
-    for doc in args:
-        for sentence in doc:
-            vocab.preheat(sentence)
-    py3dev.info('Pre-heat over', vocab.cache_size())
 
 def fix_model():
     #np.random.seed(0)
@@ -257,8 +242,23 @@ if __name__=='__main__':
         py3dev.info('load over.')
 
     # criterion init in runconfig.
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
+    #optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
     #optimizer = torch.optim.Adadelta(model.parameters(), lr=0.5)
+
+    # Prepare optimizer and schedule (linear warmup and decay)
+    no_decay = ["bias", "LayerNorm.weight"]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+        },
+        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+    ]
+    optimizer = AdamW(optimizer_grouped_parameters, lr=5e-5, eps=1e-8)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=0, num_training_steps=30000
+    )
+
 
     # === Init Data ===
     data_path = '../../dataset/squad1/'
@@ -303,6 +303,7 @@ if __name__=='__main__':
 
             l.backward()
             optimizer.step()
+            scheduler.step()
             bar.set_description('loss=%.5f' % (loss / step))
 
         print('epoch=%d\tloss=%.5f' % (epoch, loss/step), file=logger)
