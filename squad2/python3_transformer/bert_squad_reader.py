@@ -79,13 +79,18 @@ class BertSquadData:
         self.answer_range = []
         self.answer_candidates = []
 
+    def shuffle(self):
+        import random
+        shuf = list(zip(self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.ori_index, self.answer_range, self.answer_candidates))
+        random.shuffle(list(shuf))
+        self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.ori_index, self.answer_range, self.answer_candidates = zip(*shuf)
 
 def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
     import tqdm
 
     squad_data = BertSquadData(data_name)
 
-    BERT_LENGTH = 512
+    BERT_MAX_LENGTH = 512
     abandon_count = 0
     cut_count = 0
     if limit_count:
@@ -129,30 +134,29 @@ def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
             context_tokens = tokenizer.tokenize(context)
             py3dev.error('Mismatch on answer finding..')
 
-        if len(question_tokens) + len(context_tokens) >= BERT_LENGTH - 3:
-            cut_len = BERT_LENGTH-3-len(question_tokens)
+        if len(question_tokens) + len(context_tokens) >= BERT_MAX_LENGTH - 3:
+            cut_len = BERT_MAX_LENGTH-3-len(question_tokens)
             context_tokens = context_tokens[:cut_len]
             cut_count += 1
 
-        x_ids = tokenizer.encode(question_tokens, context_tokens)
-        total_len = len(x_ids)
-        x = torch.tensor(x_ids)
+        d = tokenizer.encode_plus(question_tokens, context_tokens, max_length=BERT_MAX_LENGTH)
+        x_ids = d['input_ids']
+        token_type_ids = d['token_type_ids']
+        attention_mask = d['attention_mask']
 
         offset = x_ids.index(102) + 1
         y = torch.LongTensor((answer_token_begin, answer_token_end)) + offset
-        token_type_ids = [0 if i < offset else 1 for i in range(len(x_ids))] 
-
-        if y[1]>=BERT_LENGTH:
+        if y[1]>=BERT_MAX_LENGTH:
             abandon_count += 1
             continue
 
         squad_data.qtoks.append(question_tokens)
         squad_data.ctoks.append(context_tokens)
 
-        squad_data.x.append(torch.tensor(x))
+        squad_data.x.append(torch.tensor(x_ids))
         squad_data.y.append(torch.tensor(y))
         squad_data.x_token_types.append(torch.tensor(token_type_ids))
-        squad_data.x_mask.append(torch.ones(len(x_ids), dtype=torch.long))
+        squad_data.x_mask.append(torch.tensor(attention_mask))
         squad_data.context_offset.append(offset)
         squad_data.ori_index.append(ori_index)
 
@@ -276,9 +280,26 @@ def check_ans_test():
             'log/ans/check_ans.test.out')
 
 def test_load_data():
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    train_reader = SquadReader('../../dataset/squad1/dev-v1.1.json')
-    train = bert_load_data(train_reader, tokenizer, data_name='Train')
+    tokenizer = BertTokenizer.from_pretrained('bert-base-cased', do_lower_case=True)
+    reader = SquadReader('../../dataset/squad1/dev-v1.1.json')
+    data = bert_load_data(reader, tokenizer, data_name='Test')
+
+    #import random
+    for idx in range(len(data.qtoks)):
+        #idx = random.randint(0, len(data.qtoks))
+        print('=' * 20)
+        print(data.qtoks[idx])
+        print(data.ctoks[idx])
+        print(data.x[idx])
+        print(data.y[idx])
+        print(data.x_mask[idx])
+        print(data.x_token_types[idx])
+        print(data.answer_range[idx])
+        ans_tokid = data.x[idx][data.y[idx][0]:data.y[idx][1]]
+        print(ans_tokid)
+        print(tokenizer.convert_ids_to_tokens(ans_tokid))
+        print(data.answer_candidates[idx])
+
 
 if __name__=='__main__':
     import fire

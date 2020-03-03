@@ -64,12 +64,20 @@ class RunConfigRange:
         #  second dim: (begin_pos, end_pos)
         batch_context_output = target.cuda()
         batch = batch_context_output.shape[0]
+        n = batch_context_output.shape[0]
         l = self.__criterion(predict.reshape(batch*2,-1), batch_context_output.reshape([-1]))
         return l
 
     def get_ans_range(self, y):
+        # y: (batch, 2, clen)
+
+        # for input: [beg:end]
         prob = y.permute(0,2,1)
         return dp_to_generate_answer_range(prob)
+
+        # for input: [beg:end+1]
+        #s, e = y.split(1, dim=1)
+        #return s.argmax(), e.argmax()
 
     def p(self, y, batch_idx, s0e1, pos):
         return y[batch_idx][s0e1][pos]
@@ -201,6 +209,7 @@ if __name__=='__main__':
     arg.str_opt('logname', 'L', default='<auto>')
     arg.str_opt('comment', 'm', default='')
     arg.str_opt('save', 's', default='params/temp_model.pkl')
+    arg.bool_opt('shuffle', 'S')
     arg.bool_opt('continue_training', 'c')
     opt = arg.init_arg()
     fix_model()
@@ -269,7 +278,8 @@ if __name__=='__main__':
     py3dev.info('test: [%s]' % test_filename)
 
     #tokenizer = nlp_utils.init_tokenizer()
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    py3dev.info('tokenizer from [%s]' % opt.model)
+    tokenizer = BertTokenizer.from_pretrained(opt.model, do_lower_case=True)
 
     train_reader = SquadReader(train_filename)
     test_reader = SquadReader(test_filename)
@@ -277,6 +287,12 @@ if __name__=='__main__':
     train = bert_load_data(train_reader, tokenizer, data_name='Train', limit_count=load_size[0])
     test = bert_load_data(test_reader, tokenizer, data_name='Test', limit_count=load_size[1])
     py3dev.info('Load data over, train=%d, test=%d' % (len(train.qtoks), len(test.qtoks)))
+
+    # shuffle training data.
+    if opt.shuffle:
+        py3dev.info('begin to shuffle training data..')
+        train.shuffle()
+        py3dev.info('shuffle ok.')
 
     # training phase.
     for epoch in range(epoch_count):
