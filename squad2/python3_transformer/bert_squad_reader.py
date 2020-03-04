@@ -81,9 +81,9 @@ class BertSquadData:
 
     def shuffle(self):
         import random
-        shuf = list(zip(self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.ori_index, self.answer_range, self.answer_candidates))
+        shuf = list(zip(self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.qid, self.answer_range, self.answer_candidates))
         random.shuffle(list(shuf))
-        self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.ori_index, self.answer_range, self.answer_candidates = zip(*shuf)
+        self.qtoks, self.ctoks, self.x, self.y, self.x_mask, self.x_token_types, self.context_offset, self.qid, self.answer_range, self.answer_candidates = zip(*shuf)
 
 def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
     import tqdm
@@ -171,7 +171,7 @@ def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
     py3dev.info('load=%d, abandon=%d, cut=%d' % (len(squad_data.x), abandon_count, cut_count))
     return squad_data
 
-def check_answer(answer_fn, squad_fn, output_fn):
+def check_answer(answer_fn, squad_fn, output_fn, output_json_fn):
     import sys
     import tqdm
 
@@ -179,17 +179,23 @@ def check_answer(answer_fn, squad_fn, output_fn):
 
     answer_fd = open(answer_fn)
     answers = {}
+    output_answers_dict = {}
     for row in py3dev.foreach_row(open(answer_fn)):
-        if len(row)!=7:
+        if len(row)!=8:
             break
-        pred, tgt, tag, pratio, py_, py, ori_index = row
+        pred, tgt, tag, pratio, py_, py, qid, ans = row
         pratio = float(pratio)
         py_ = float(py_)
         py = float(py)
         ps, pe = map(lambda x:int(x), pred.split(','))
         ts, te = map(lambda x:int(x), tgt.split(','))
-        answers[int(ori_index)] = ((ps, pe), (ts, te), tag, pratio, py_, py)
-    print('answer loaded.', file=sys.stderr)
+        answers[qid] = ((ps, pe), (ts, te), tag, pratio, py_, py, qid, ans)
+        output_answers_dict[qid] = ans
+    print('answer loaded. n=%d'%len(answers), file=sys.stderr)
+
+    if output_json_fn is not None:
+        json_text = json.dumps(output_answers_dict)
+        print(json_text, file=open(output_json_fn, 'w'))
 
     reader = SquadReader(squad_fn)
     output = open(output_fn, 'w')
@@ -205,13 +211,13 @@ def check_answer(answer_fn, squad_fn, output_fn):
         idx += 1
         if is_impossible:
             continue
-        if idx not in answers:
+        if qid not in answers:
             continue
         
         qtoks = tokenizer.tokenize(question)
         offset = len(qtoks) + 2
         ctoks = tokenizer.tokenize(context)
-        ans_y_, ans_y, tag, p_ratio, p_y_, p_y = answers[idx]
+        ans_y_, ans_y, tag, p_ratio, p_y_, p_y, qid, _ = answers[qid]
 
         ans_y_ = list(map(lambda x:x-offset, ans_y_))
         ans_y = list(map(lambda x:x-offset, ans_y))
@@ -242,9 +248,11 @@ def check_answer(answer_fn, squad_fn, output_fn):
         if ans_y_ == ans_y:
             em = True
 
-        adjust_answer = ori_answer.replace(' ', '')
+        norm = lambda a:a.lower().replace(u' ', u'').replace('.', '').replace(',','')
+
+        adjust_answer = norm(ori_answer)
         for a in ans:
-            aa = a['text'].lower().replace(u' ', u'')
+            aa = norm(a['text'])
             if aa == adjust_answer:
                 em = True
                 break
@@ -272,12 +280,15 @@ def check_answer(answer_fn, squad_fn, output_fn):
 def check_ans_train():
     check_answer('log/ans/train.ans.out', 
             '../../dataset/squad1/train-v1.1.json', 
-            'log/ans/check_ans.train.out')
+            'log/ans/check_ans.train.out',
+            'log/ans/train.out.json')
 
 def check_ans_test():
     check_answer('log/ans/test.ans.out', 
             '../../dataset/squad1/dev-v1.1.json', 
-            'log/ans/check_ans.test.out')
+            'log/ans/check_ans.test.out',
+            'log/ans/test.out.json')
+
 
 def test_load_data():
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased', do_lower_case=True)

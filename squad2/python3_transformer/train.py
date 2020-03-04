@@ -222,7 +222,6 @@ if __name__=='__main__':
 
     # milestones model.
     py3dev.info('Preparing models..')
-    #model = V5_BiDafAdjust(pretrain_weights=vocab.get_pretrained()).cuda()
     model = V6_Bert(opt.model).cuda()
 
     # on testing
@@ -255,17 +254,9 @@ if __name__=='__main__':
     #optimizer = torch.optim.Adadelta(model.parameters(), lr=0.5)
 
     # Prepare optimizer and schedule (linear warmup and decay)
-    no_decay = ["bias", "LayerNorm.weight"]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-            "weight_decay": 0.0,
-        },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-    ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=5e-5, eps=1e-8)
+    optimizer = AdamW(model.parameters(), lr=3e-5, eps=1e-8)
     scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=0, num_training_steps=30000
+        optimizer, num_warmup_steps=0, num_training_steps=len(train.x)*epoch_count
     )
 
 
@@ -279,7 +270,7 @@ if __name__=='__main__':
 
     #tokenizer = nlp_utils.init_tokenizer()
     py3dev.info('tokenizer from [%s]' % opt.model)
-    tokenizer = BertTokenizer.from_pretrained(opt.model, do_lower_case=True)
+    tokenizer = BertTokenizer.from_pretrained(opt.model)
 
     train_reader = SquadReader(train_filename)
     test_reader = SquadReader(test_filename)
