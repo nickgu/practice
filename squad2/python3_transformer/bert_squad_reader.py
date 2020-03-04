@@ -90,7 +90,7 @@ def bert_load_data(reader, tokenizer, data_name=None, limit_count=None):
 
     squad_data = BertSquadData(data_name)
 
-    BERT_MAX_LENGTH = 512
+    BERT_MAX_LENGTH = 384
     abandon_count = 0
     cut_count = 0
     if limit_count:
@@ -310,6 +310,18 @@ def test_load_data():
         print(ans_tokid)
         print(tokenizer.convert_ids_to_tokens(ans_tokid))
         print(data.answer_candidates[idx])
+
+
+def debug_reader(squad_fn):
+    reader = SquadReader(squad_fn)
+    x = 0
+    for title, context, qid, question, ans, is_impossible in reader.iter_instance():
+        tok = context.split(' ')
+        l = len(tok)
+        x += (l+127) // 128
+
+    print(reader.instance_count())
+    print(x)
 
 
 if __name__=='__main__':
