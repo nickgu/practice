@@ -9,15 +9,17 @@ import torch.nn.utils.rnn as rnn_utils
 import py3dev
 from transformers import *
 
-class V6_Bert(torch.nn.Module):
+class V6_Bert(BertPreTrainedModel):
     '''
         import tokens
     '''
-    def __init__(self, model_name='bert-base-uncased'):
-        super(V6_Bert, self).__init__()
-        py3dev.info('Bert from [%s]' % model_name)
-        self.bert = BertModel.from_pretrained(model_name)
+    def __init__(self, config):
+        super(V6_Bert, self).__init__(config)
+        #py3dev.info('Bert from [%s]' % model_name)
+        self.bert = BertModel(config)
         self.linear = torch.nn.Linear(768, 2)
+
+        self.init_weights()
 
     def forward(self, merge_tok_ids, token_type_ids, attention_mask):
         # merge_tok_ids:
