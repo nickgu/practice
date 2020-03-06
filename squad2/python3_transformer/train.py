@@ -223,6 +223,7 @@ if __name__=='__main__':
     # milestones model.
     py3dev.info('Preparing models..')
     model = V6_Bert(opt.model).cuda()
+    #model = V6_Bert.from_pretrained(opt.model).cuda()
 
     # on testing
 
@@ -270,7 +271,11 @@ if __name__=='__main__':
 
     #tokenizer = nlp_utils.init_tokenizer()
     py3dev.info('tokenizer from [%s]' % opt.model)
-    tokenizer = BertTokenizer.from_pretrained(opt.model)
+    if '-cased' in opt.model:
+        py3dev.info('tokenizer(%s) do_lower_case=True' % opt.model)
+        tokenizer = BertTokenizer.from_pretrained(opt.model, do_lower_case=True)
+    else:
+        tokenizer = BertTokenizer.from_pretrained(opt.model)
 
     train_reader = SquadReader(train_filename)
     test_reader = SquadReader(test_filename)
