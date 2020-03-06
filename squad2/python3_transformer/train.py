@@ -256,7 +256,7 @@ if __name__=='__main__':
     # Prepare optimizer and schedule (linear warmup and decay)
     optimizer = AdamW(model.parameters(), lr=3e-5, eps=1e-8)
     scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=0, num_training_steps=len(train.x)*epoch_count
+        optimizer, num_warmup_steps=0, num_training_steps=30000
     )
 
 
@@ -309,6 +309,10 @@ if __name__=='__main__':
             loss += l.item()
 
             l.backward()
+
+            # clip grad norm.
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
             optimizer.step()
             scheduler.step()
             bar.set_description('loss=%.5f' % (loss / step))
